@@ -11,9 +11,9 @@ Title: OSCAR Manual Amendments Script
 Compatibility: Python 3.6 or later
 Status: Draft
 Author: Danny Ruttle
-Version Date: 2019-02-11
+Version Date: 2019-02-13
 Project: ODS Reconfiguration
-Internal Ref: v0.1
+Internal Ref: v0.2
 Copyright Health and Social Care Information Centre (c) 2019
 
 Licensed under the Apache License, Version 2.0 (the "License");
@@ -44,15 +44,11 @@ The module defined below carries out the following procedures:
 
 CHANGES:
 
-0.1 - initial POC
+0.1 - initial POC with half a dozen Social HQ/Providers
 
 TO DO:
 
-1. Handle Pop-ups - Done for "Laeve saved record" alert
-2. Deal with Locked Records - need navigate to that part of the system and release
-3. CSV to ignore header row - Done
-4. Handle alerts - bypassbut collect the error message/notification
-#  selenium.common.exceptions.UnexpectedAlertPresentException: Alert Text: None
+1. Handle that have been recorded as autoload failed - defer these and log that the action for the support team to follow up
 
 
 """
@@ -63,7 +59,6 @@ class ManAmend:
         """
         """
         self.fileTime = datetime.datetime.now().strftime("%Y-%m-%dT%H%M%S%Z")  # can't include ":" in filenames
-        self.logFileName = "ScriptLog_ManualAmends%s.csv" % self.fileTime
         self.driver = webdriver.Chrome('C:\\selenium\chromedriver.exe')
         self.auditText = ""
 
@@ -86,9 +81,9 @@ class ManAmend:
         :param driver:
         :return:
         """
-
-        #self.logFile = open(self.logFileName, "w")
-        #self.logFile.write("processing started: %s\n" % self.fileTime )
+        self.logFileName = "ScriptLog_ManualAmends_%s_%s_%s.csv" % ( self.env, AmendID, self.fileTime )
+        self.logFile = open(self.logFileName, "w")
+        self.logFile.write("processing started: %s\n" % self.fileTime )
 
         self.auditText = AuditText
 
@@ -101,47 +96,58 @@ class ManAmend:
             print("naviagated to X09 = %s" % url)
             time.sleep(2)
 
-            url = "https://%s/%s" % (self.env, AmendID)
+            url = "https://%s/Exchange/ImportGroupManualChanges.aspx?ID=%s" % (self.env, AmendID)
             print("Import Group = %s" % url)
             self.driver.get(url)
             time.sleep(2)
 
             try:
                 if self.navigateToClassID("MainContent_gvImportGroup_hlProcess_0"):
-                    msg = '"%s","navigate to record","processed successfully"' % self.target
+                    msg = '"%s","navigate to record","processed successfully"\n' % self.target
                     print( msg )
                     time.sleep(2)
                     if self.navigateToClassID("MainContent_btnSave"):
-                        msg = '"%s","accepting amendment","processed successfully"' % self.target
+                        msg = '"%s","accepting amendment","processed successfully"\n' % self.target
                         print(msg)
                         if self.enterTextToClassID("MainContent_AuditReason1_txtAuditReason"):
-                            msg = '"%s","audit text entry","processed successfully"' % self.target
-                            print(msg)
+                            msg = '"%s","audit text entry","processed successfully"\n' % self.target
+                            print( msg )
                             time.sleep(2)
                             # Click the Audit reason Button
                             if self.navigateToClassID("MainContent_AuditReason1_btnAuditReasonOk"):
-                                msg = '"%s","audit button press","processed successfully"' % self.target
-                                print(msg)
+                                msg = '"%s","audit button press","processed successfully"\n' % self.target
+                                print( msg )
                                 time.sleep(2)
                             else:
-                                msg = '"%s","audit button press","processing failed"' % self.target
-                                print(msg)
+                                msg = '"%s","audit button press","processing failed"\n' % self.target
+                                print( msg )
+                                time.sleep(2)
                         else:
-                            msg = '"%s","audit button press","processing failed"' % self.target
-                            print(msg)
+                            msg = '"%s","audit button press","processing failed"\n' % self.target
+                            print( msg )
+                            time.sleep(2)
                     else:
-                        msg = '"%s","audit text entry","processing failed"' % self.target
+                        msg = '"%s","audit text entry","processing failed"\n' % self.target
                         print( msg )
+                        time.sleep(2)
                 else:
-                    msg = '"%s","navigate to record","processing failed"' % self.target
-            except NoSuchElementException:
+                    msg = '"%s","navigate to record","processing failed"\n' % self.target
+                    print( msg )
+                    time.sleep(2)
+            except NoSuchElementException as e:
                 endOfRecords = True
+                e.msg
+                msg = "End of records reached (hopefully via NoSuchElementException MainContent_gvImportGroup_hlProcess_0) - see below:\n%s\n" % e.msg
+                print( msg )
+                time.sleep(2)
+
+            self.logFile.write( msg )
 
 
         # CLOSE THE SCRIPT LOGFILE:
-        #self.endFileTime = datetime.datetime.now().strftime("%Y-%m-%dT%H%M%S%Z")  # can't include ":" in filenames
-        #self.logFile.write("processing completed: %s\n" % self.endFileTime)
-        #self.logFile.close()
+        self.endFileTime = datetime.datetime.now().strftime("%Y-%m-%dT%H%M%S%Z")  # can't include ":" in filenames
+        self.logFile.write("processing completed: %s\n" % self.endFileTime)
+        self.logFile.close()
         # quit the driver
         self.driver.quit()
 
@@ -184,10 +190,37 @@ class ManAmend:
                 time.sleep(1)
         return result
 
+    def checkNotes(self, ID):   # ID = MainContent_gvImportGroup_aNotes_0
+        """
+        Class only appears if Notes are present
+        Notes are only present if it's not a straightforward click
+        So need to look for this class and:
+        if present: Defer
+        else: Accept
+        """
+
+        result = False
+        attempts = 0
+        while attempts < 3:
+            try:
+                self.target = self.driver.find_element_by_id(ID)
+                result = True
+                break
+            except StaleElementReferenceException:
+                attempts += 1
+                time.sleep(1)
+            except NoSuchElementException:
+                attempts += 1
+                time.sleep(1)
+                result = False
+                break
+        return result
+
+
 if __name__ == "__main__":
     MA = ManAmend()
     MA.connect("oscar-testsp", "corp%5cdaru", "$Spring2019")
-    MA.processAmendments("Exchange/ImportGroupManualChanges.aspx?ID=623", "CQC ALIGNMENT - SELENIUM AUTOMATED ACCEPTANCE")
+    MA.processAmendments("625", "CQC ALIGNMENT - SELENIUM AUTOMATED ACCEPTANCE")
 
 
 """
