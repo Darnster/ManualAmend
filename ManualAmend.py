@@ -49,6 +49,7 @@ CHANGES:
 TO DO:
 
 1. Handle that have been recorded as autoload failed - defer these and log that the action for the support team to follow up
+2. Handle records that display errors (as in the broken record detector)
 
 
 """
@@ -61,6 +62,7 @@ class ManAmend:
         self.fileTime = datetime.datetime.now().strftime("%Y-%m-%dT%H%M%S%Z")  # can't include ":" in filenames
         self.driver = webdriver.Chrome('C:\\selenium\chromedriver.exe')
         self.auditText = ""
+        self.sleepDuration = 2
 
 
     def connect(self, env, user, pwd):
@@ -86,61 +88,80 @@ class ManAmend:
         self.logFile.write("processing started: %s\n" % self.fileTime )
 
         self.auditText = AuditText
-
+        testCount = 0
         endOfRecords = False
         while not endOfRecords:
+            if testCount == 3:
+                sys.exit()
+            # flag to decide whether to Accept or Defer the change
+            defer = False
             # work around for too many redirects issue - browse to X09:
             X09Org = "/OrganisationScreens/OrganisationMaintenance.aspx?ID=111933"
             url = "https://%s/%s" % (self.env, X09Org)
             self.driver.get(url)
             print("naviagated to X09 = %s" % url)
-            time.sleep(2)
+            time.sleep( self.sleepDuration )
 
             url = "https://%s/Exchange/ImportGroupManualChanges.aspx?ID=%s" % (self.env, AmendID)
             print("Import Group = %s" % url)
             self.driver.get(url)
-            time.sleep(2)
+            time.sleep( self.sleepDuration )
 
             try:
-                if self.navigateToClassID("MainContent_gvImportGroup_hlProcess_0"):
-                    msg = '"%s","navigate to record","processed successfully"\n' % self.target
-                    print( msg )
-                    time.sleep(2)
-                    if self.navigateToClassID("MainContent_btnSave"):
-                        msg = '"%s","accepting amendment","processed successfully"\n' % self.target
+                # first step is to get the the OSCAR organisation ID by returning the text from the element below and assigning this to self.target
+                # <input type="hidden" name="ctl00$MainContent$gvImportGroup$ctl04$hidIGOID" id="MainContent_gvImportGroup_hidIGOID_1" value="3955943">
+                if self.checkNotes("MainContent_gvImportGroup_aNotes_0"):
+                    msg = '"%s","Processing Notes Found","processing deferred"\n' % self.target
+                    print(msg)
+                    time.sleep(self.sleepDuration)
+                    if self.navigateToClassID("MainContent_gvImportGroup_chkDefer_0"):
+                        msg = '"%s","Defer checkbox clicked","Record marked to be deferred"\n' % self.target
                         print(msg)
-                        if self.enterTextToClassID("MainContent_AuditReason1_txtAuditReason"):
-                            msg = '"%s","audit text entry","processed successfully"\n' % self.target
-                            print( msg )
-                            time.sleep(2)
-                            # Click the Audit reason Button
-                            if self.navigateToClassID("MainContent_AuditReason1_btnAuditReasonOk"):
-                                msg = '"%s","audit button press","processed successfully"\n' % self.target
+                        time.sleep(self.sleepDuration)
+                        if self.navigateByName( "ctl00$MainContent$btnDefer" ):
+                            msg = '"%s","Defer button clicked","Record successfully deferred"\n' % self.target
+                            print(msg)
+                            time.sleep(self.sleepDuration)
+                else:
+                    if self.navigateToClassID("MainContent_gvImportGroup_hlProcess_0"):
+                        msg = '"%s","navigate to record","processed successfully"\n' % self.target
+                        print( msg )
+                        time.sleep( self.sleepDuration )
+                        if self.navigateToClassID("MainContent_btnSave"):
+                            msg = '"%s","accepting amendment","processed successfully"\n' % self.target
+                            print(msg)
+                            if self.enterTextToClassID("MainContent_AuditReason1_txtAuditReason"):
+                                msg = '"%s","audit text entry","processed successfully"\n' % self.target
                                 print( msg )
-                                time.sleep(2)
+                                time.sleep( self.sleepDuration )
+                                # Click the Audit reason Button
+                                if self.navigateToClassID("MainContent_AuditReason1_btnAuditReasonOk"):
+                                    msg = '"%s","audit button press","processed successfully"\n' % self.target
+                                    print( msg )
+                                    time.sleep( self.sleepDuration )
+                                else:
+                                    msg = '"%s","audit button press","processing failed"\n' % self.target
+                                    print( msg )
+                                    time.sleep( self.sleepDuration )
                             else:
                                 msg = '"%s","audit button press","processing failed"\n' % self.target
                                 print( msg )
-                                time.sleep(2)
+                                time.sleep( self.sleepDuration )
                         else:
-                            msg = '"%s","audit button press","processing failed"\n' % self.target
+                            msg = '"%s","audit text entry","processing failed"\n' % self.target
                             print( msg )
-                            time.sleep(2)
+                            time.sleep( self.sleepDuration )
                     else:
-                        msg = '"%s","audit text entry","processing failed"\n' % self.target
+                        msg = '"%s","navigate to record","processing failed"\n' % self.target
                         print( msg )
-                        time.sleep(2)
-                else:
-                    msg = '"%s","navigate to record","processing failed"\n' % self.target
-                    print( msg )
-                    time.sleep(2)
+                        time.sleep( self.sleepDuration )
             except NoSuchElementException as e:
                 endOfRecords = True
                 e.msg
                 msg = "End of records reached (hopefully via NoSuchElementException MainContent_gvImportGroup_hlProcess_0) - see below:\n%s\n" % e.msg
                 print( msg )
-                time.sleep(2)
-
+                time.sleep( self.sleepDuration )
+            testCount += 1
             self.logFile.write( msg )
 
 
@@ -161,6 +182,24 @@ class ManAmend:
         while attempts < 3:
             try:
                 self.target = self.driver.find_element_by_id( ID )
+                self.target.click()
+                result = True
+                break
+            except StaleElementReferenceException:
+                attempts += 1
+                time.sleep(1)
+        return result
+
+    def navigateByName(self, Name):
+        """
+        :param Name: String = Name of widget to be clicked
+        :return: Boolean
+        """
+        result = False
+        attempts = 0
+        while attempts < 3:
+            try:
+                self.target = self.driver.find_elements_by_name( Name )
                 self.target.click()
                 result = True
                 break
@@ -217,10 +256,11 @@ class ManAmend:
         return result
 
 
+
 if __name__ == "__main__":
     MA = ManAmend()
     MA.connect("oscar-testsp", "corp%5cdaru", "$Spring2019")
-    MA.processAmendments("625", "CQC ALIGNMENT - SELENIUM AUTOMATED ACCEPTANCE")
+    MA.processAmendments("627", "CQC ALIGNMENT - SELENIUM AUTOMATED ACCEPTANCE")
 
 
 """
