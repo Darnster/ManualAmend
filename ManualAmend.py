@@ -35,21 +35,28 @@ The module defined below carries out the following procedures:
 
 1. Opens a URL to a page that contains records requiring manual amendments (post import)
 2. It authenticates using the Selenium chrome Web Driver
-3. It searches for the element "MainContent_gvImportGroup_hlProcess_0" 
-    a. clicks the link within that table cell e.g. href="ImportManualChange.aspx?ImportGroupOrganisationID=3955786"
-    b. searches for a button on the target page with the ID "btnSave"
-    c. Clicks the button which then returns the user back to the original URL
+3. It always acts on the record at the top of the list, processing that and then refreshing the page containing manual amendments
+4. It searches for the element "MainContent_gvImportGroup_aNotes_0" (this will be in the first entry only)
+    if this element is present
+        a. the checkbox is clicked to identify that this record should be deferred
+        b. the defer button is pressed, which then refreshes the page and the next record is then at index "_0"
+    else
+        a. searches for the class "MainContent_gvImportGroup_hlProcess_0"
+        b. clicks the link within that table cell e.g. href="ImportManualChange.aspx?ImportGroupOrganisationID=3955786"
+        c. calls enterTextToClassID() which searches for the audit field and enters the audit text
+        d. searches for a button on the target page with the ID "btnSave"
+        e. ntnSave is then clicked button which then returns the process back to the original URL
 4. A log is provided to audit what the script did and report any errors
 
 
 CHANGES:
 
 0.1 - initial POC with half a dozen Social HQ/Providers
+0.2 - modified to action the defer on the same screen
 
 TO DO:
 
-1. Handle that have been recorded as autoload failed - defer these and log that the action for the support team to follow up
-2. Handle records that display errors (as in the broken record detector)
+1. Handle records that display errors (as in the broken record detector) - if required, to be determined by testing
 
 
 """
