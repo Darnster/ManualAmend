@@ -16,9 +16,9 @@ Title: OSCAR Manual Amendments Script
 Compatibility: Python 3.6 or later
 Status: Draft
 Author: Danny Ruttle
-Version Date: 2019-02-13
-Project: ODS Reconfiguration
-Internal Ref: v0.2
+Version Date: 2019-04-04
+Project: ODS 3rd PArty data Automation
+Internal Ref: v0.3
 Copyright Health and Social Care Information Centre (c) 2019
 
 Licensed under the Apache License, Version 2.0 (the "License");
@@ -58,6 +58,7 @@ CHANGES:
 
 0.1 - initial POC with half a dozen Social HQ/Providers
 0.2 - modified to action the defer on the same screen
+0.3 - version checked in without TOO MANY REDIRECTS issue fixed
 
 TO DO:
 
@@ -97,9 +98,13 @@ class ManAmend:
         """
 
         self.env = env
+        self.user = user
+        self.pwd = pwd
         # connect to the environment (not part of the test) to prompt authentication
-        self.driver.get('https://%s:%s@%s/' % ( user, pwd, self.env ) )
-        time.sleep(self.sleepDuration)
+        self.driver.get('https://%s:%s@%s/' % ( self.user, self.pwd, self.env ) )
+        #cookiePause = 10
+        #time.sleep(self.sleepDuration)
+        #print("sleeping for %s seconds to allow manual cookie clearance..." % ( str(self.sleepDuration * cookiePause)) )
 
 
     def processAmendments(self, AmendID, AuditText):
@@ -117,15 +122,18 @@ class ManAmend:
         endOfRecords = False
         OrganisationID = 0 # Org being processed - required for audit
 
-        url = "https://%s/Exchange/ImportGroupManualChanges.aspx?ID=%s" % (self.env, AmendID)
-        print("Import Group = %s" % url)
-        self.driver.get(url)
-        time.sleep(self.sleepDuration * 2)
+        #AmendmentsURL = "https://%s:%s@%s/Exchange/ImportGroupManualChanges.aspx?ID=%s" % (self.user, self.pwd, self.env, AmendID)
+        AmendmentsURL = "https://%s/Exchange/ImportGroupManualChanges.aspx?ID=%s" % (self.env, AmendID)
+
+        print("Import Group to be processed = %s" % AmendmentsURL)
+
 
         while not endOfRecords:
             if testCount == 8:
                 sys.exit()
             # if we can't get the organisationID then exit
+            self.driver.get(AmendmentsURL)
+            time.sleep(self.sleepDuration)
             try:
                 OrganisationID = self.getOrganisationIDfromProcessLink("MainContent_gvImportGroup_hlProcess_0")
             except:
@@ -139,22 +147,26 @@ class ManAmend:
             try:
                 if self.checkNotes("MainContent_gvImportGroup_aNotes_0"):
                     msg = '"%s","Processing Notes Found","processing deferred"\n' % OrganisationID
+                    print(msg)
                     self.logFile.write(msg)
                     time.sleep(self.sleepDuration)
                     if self.navigateToClassID("MainContent_gvImportGroup_chkDefer_0"):
                         msg = '"%s","Defer checkbox clicked and marked to be deferred"\n' % OrganisationID
+                        print(msg)
                         self.logFile.write(msg)
                         time.sleep(self.sleepDuration)
                         # for next step selenium claims that ctl00$MainContent$btnDefer is a list so changed to ID and btnDefer
                         if self.navigateToClassID( "btnDefer" ):
                             msg = '"%s","Defer button clicked and successfully selected for confirmation to be deferred"\n' % OrganisationID
+                            print(msg)
                             self.logFile.write(msg)
                             time.sleep(self.sleepDuration)
-
-                        # there's also an alert dialog "Are you sure you want to defer all the selected manual amendments?"
-                        # with options Yes or Cancel - I so alert.accept() is probably the way forward
-                        # this is handled as an exception
-                        # or I need to plan for it here as it's not getting picked up by the driver!
+                            # there's also an alert dialog "Are you sure you want to defer all the selected manual amendments?"
+                            # with options Yes or Cancel - I so alert.accept() is probably the way forward
+                            self.driver.switch_to.alert.accept()
+                            msg = "%s, deferred alert box successfully accepted\n" % OrganisationID
+                            print(msg)
+                            self.logFile.write(msg)
 
                 else:
                     if self.navigateToClassID("MainContent_gvImportGroup_hlProcess_0"):
@@ -171,7 +183,7 @@ class ManAmend:
                             """
                             Need to detect if there's an error on the page
                             """
-                            self.handlePrcoessingError()  # may need to put a conditional here
+                            self._handlePrcoessingError()  # may need to put a conditional here
 
                             if self.enterTextToClassID("MainContent_AuditReason1_txtAuditReason"):
                                 msg = '"%s","audit text entry entered successfully"\n' % OrganisationID
@@ -204,31 +216,26 @@ class ManAmend:
                         print( msg )
                         self.logFile.write(msg)
                         time.sleep( self.sleepDuration )
-            except NoSuchElementException as e: #TOO MANNY REDIRECTS
-                #endOfRecords = True
-                #e.msg
-                #msg = "End of records reached (hopefully via NoSuchElementException MainContent_gvImportGroup_hlProcess_0) - see below:\n%s\n" % e.msg
-                #print( msg )
-                #time.sleep( self.sleepDuration )
+            except NoSuchElementException as e:
+                endOfRecords = True
+                e.msg
+                msg = "End of records reached (hopefully via NoSuchElementException MainContent_gvImportGroup_hlProcess_0) - see below:\n%s\n" % e.msg
+                print( msg )
+                time.sleep( self.sleepDuration )
 
-                time.sleep(self.sleepDuration * 5)
 
-                url = "https://%s/Exchange/ImportGroupManualChanges.aspx?ID=%s" % (self.env, AmendID)
-                print("Import Group = %s refreshed following\n%s " % ( url, e.msg))
-                self.driver.get(url)
+                # obsolete stuff below after figuring out the TOO MANY redirects - hopefully
+                #print("Import Group = %s attempt to refresh following\n%s " % (AmendmentsURL, e.msg))
+                #self.driver.get(AmendmentsURL)
                 time.sleep(self.sleepDuration * 2)
-            """
-            except UnexpectedAlertPresentException as e:
-                print( "UnexpectedAlertPresentException called")
-                # assume it's the comfirmation dialog that the record needs to be deferred
-                self.driver.switch_to.alert.accept()  # .dismiss() did not work
-                msg = "%s, deferred successfully" % OrganisationID
-                print(msg)
-                self.logFile.write(msg)
-            """
+
 
             testCount += 1
             self.logFile.write( msg )
+            # overide the redirect here:
+            authURL = "https://%s/Account/Login.aspx?%s:%s" % ( self.env, self.user, self.pwd )
+            self.driver.get(authURL)
+
 
 
         # CLOSE THE SCRIPT LOGFILE:
