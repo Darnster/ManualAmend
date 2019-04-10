@@ -27,19 +27,20 @@ class SelTest:
         print("Successfully connected to = %s" % self.connectURL)
         time.sleep(self.sleepDuration)
 
-
     def refresh(self):
         self.driver.refresh()
         print("Successfully refreshed %s" % self.connectURL)
         time.sleep(self.sleepDuration)
 
-    def clearAllCookies(self):
-        self.driver.get("chrome://settings/siteData")
-        if self.navigateByCSS('* /deep/ #removeShowingSites'):
-            print("Successfully deleted all cookies")
+    def clearCache(self):
+        self.driver.get('chrome://settings/clearBrowserData')
+        time.sleep(2)
+        if self.navigateByCSS('* /deep/ # clearBrowsingDataConfirm'):
+            # removeShowingSites'
+            print("Successfully cleared the cache")
             time.sleep(self.sleepDuration * 30)
         else:
-            print("Unable to delete all cookies")
+            print("Unable to clear the cache")
             sys.exit()
 
     def navigateByCSS(self, CSSRef):
@@ -65,12 +66,13 @@ class SelTest:
         return result
 
 
-
 if __name__ == "__main__":
     poc = SelTest()
-    poc.connect("https://corp%5cdaru:$Spring2019@oscar-testsp")
+    user = "<shortcode>"
+    password = "<password>"
+    poc.connect("https://corp%5c" + user + ":" + password + "@oscar-testsp")
     poc.refresh()
-    poc.clearAllCookies()
+    poc.clearCache()
     # should present login dialog
     poc.connect("https://oscar-testsp")
 
