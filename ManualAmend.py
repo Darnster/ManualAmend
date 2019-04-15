@@ -1,11 +1,14 @@
+import win32com.client
 from selenium import webdriver
-from selenium.webdriver import Chrome
-from selenium.webdriver import ChromeOptions
+from selenium.webdriver import Firefox
+from selenium.webdriver import FirefoxOptions
 from selenium.common.exceptions import *
+from selenium.webdriver.common.action_chains import ActionChains
+from selenium.webdriver.common.keys import Keys
+from selenium.webdriver.firefox.firefox_binary import FirefoxBinary
+
 import subprocess
 
-# for Edge
-from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
 
 import time, datetime, sys
 import csv
@@ -84,7 +87,8 @@ class ManAmend:
         """
         self.fileTime = datetime.datetime.now().strftime("%Y-%m-%dT%H%M%S%Z")  # can't include ":" in filenames
 
-        self.driver = Chrome( executable_path='C:\\selenium\ChromeDriver.exe')
+        binary = FirefoxBinary('C:\\Program Files\\Mozilla Firefox\\firefox.exe')
+        self.driver = Firefox(firefox_binary=binary, executable_path='C:\\selenium\geckodriver.exe')
         self.auditText = ""
         self.sleepDuration = 1
         self.processLimit = 0
@@ -107,10 +111,26 @@ class ManAmend:
         self.processLimit = limit
 
         #test connect:
-        connectURL = "https://%s:%s@%s" % ( self.user, self.pwd, self.env )
-        print("Successfully connected to = %s" % connectURL)
-        self.driver.get(connectURL)
-        time.sleep(self.sleepDuration)
+        connectURL = "https://%s" % ( self.env )
+        print("Connecting to %s......" % connectURL)
+        try:
+            self.driver.get(connectURL)
+            print("Successfully connected to %s......" % connectURL)
+        except UnexpectedAlertPresentException:
+            print("need to authenticate when accessing home")
+            print("### self.user = %s ###" % self.user)
+            time.sleep(self.sleepDuration)
+            print("need to authenticate when accessing amendments page")
+            shell = win32com.client.Dispatch("WScript.Shell")
+            shell.Sendkeys("corp\\%s" % self.user)
+            time.sleep(3)
+            shell.Sendkeys("{TAB}")
+            time.sleep(3)
+            shell.Sendkeys(self.pwd)
+            time.sleep(3)
+            shell.Sendkeys("{ENTER}")
+            time.sleep(3)
+        time.sleep(self.sleepDuration) #allow time to login manually
 
         # logging vars
         self.logFileName = "ScriptLog_ManualAmends_%s_%s_%s.csv" % (self.env, self.amendID, self.fileTime)
@@ -136,13 +156,37 @@ class ManAmend:
         """
         OrganisationID = 0 # Org being processed - required for audit
 
-        AmendmentsURL = "https://%s:%s@%s/Exchange/ImportGroupManualChanges.aspx?ID=%s" % (self.user, self.pwd, self.env, self.amendID)
-        #AmendmentsURL = "https://%s/Exchange/ImportGroupManualChanges.aspx?ID=%s" % (self.env, self.amendID)
+        #AmendmentsURL = "https://%s:%s@%s/Exchange/ImportGroupManualChanges.aspx?ID=%s" % (self.user, self.pwd, self.env, self.amendID)
+        AmendmentsURL = "https://%s/Exchange/ImportGroupManualChanges.aspx?ID=%s" % (self.env, self.amendID)
 
         print("Import Group to be processed = %s" % AmendmentsURL)
 
         # if we can't get the organisationID then exit
-        self.driver.get(AmendmentsURL)
+        try:
+            self.driver.get(AmendmentsURL)
+        except UnexpectedAlertPresentException:
+            print("### self.user = %s ###" % self.user)
+            time.sleep(self.sleepDuration)
+            print("need to authenticate when accessing amendments page")
+            shell = win32com.client.Dispatch("WScript.Shell")
+            shell.Sendkeys("corp\\%s" % self.user)
+            time.sleep(3)
+            shell.Sendkeys("{TAB}")
+            time.sleep(3)
+            shell.Sendkeys(self.pwd)
+            time.sleep(3)
+            shell.Sendkeys("{ENTER}")
+            time.sleep(3)
+            self.driver.get(AmendmentsURL)
+
+            #alert = self.driver.switch_to.window(self.driver.window_handles[1])
+            #alert = self.driver.switch_to.alert()
+            #time.sleep(self.sleepDuration)
+            #alert.send_keys("corp\\%s" % self.user)
+            #alert.send_keys(Keys.TAB)
+            #alert.send_keys("%s" % self.pwd)
+            #alert.accept()
+
         time.sleep(self.sleepDuration * 2)
         #self.detectTooManyRedirects()
 
@@ -195,7 +239,7 @@ class ManAmend:
                     msg = '"%s","accepting amendment processed successfully"\n' % OrganisationID
                     print(msg)
                     self.logFile.write(msg)
-
+                    time.sleep(self.sleepDuration * 2)
                     """
                     Need to detect if there's an error on the page and by pass for now
                     """
@@ -439,7 +483,7 @@ if __name__ == "__main__":
         auditText = sys.argv[5] # "CQC ALIGNMENT - SELENIUM AUTOMATED ACCEPTANCE"
         recordsToProces = sys.argv[6]
         MA = ManAmend()
-        MA.process(env, "corp%5c"+ user, pwd, amendID, auditText, int(recordsToProces))
+        MA.process(env, user, pwd, amendID, auditText, int(recordsToProces))
     else:
         msg = "Please provide the following arguments:\n"
         msg+= "1. environment, e.g. OSCAR-TESTSP\n"
