@@ -11,9 +11,9 @@ Title: OSCAR Manual Amendments Script
 Compatibility: Python 3.6 or later
 Status: Draft
 Author: Danny Ruttle
-Version Date: 2019-04-15
+Version Date: 2019-04-17
 Project: ODS 3rd PArty data Automation
-Internal Ref: v0.4
+Internal Ref: v0.5
 Copyright Health and Social Care Information Centre (c) 2019
 
 Licensed under the Apache License, Version 2.0 (the "License");
@@ -56,17 +56,13 @@ CHANGES:
 0.2 - modified to action the defer on the same screen
 0.3 - version checked in ***without*** TOO MANY REDIRECTS issue fixed
 0.4 - Firefox version with first stab at removing too many redirects handlers
+0.5 - Truncate short name if that error appears. Webdriver Exception first stab
 
 TO DO:
 
-1. Handle records that display errors (as in the broken record detector) - if required, to be determined by testing
-2. Truncate short name if that error appears.
-3. Identify "TOO MANY REDIRECTS" message and bypass
-- search for ID/text
-- refresh and search until not present
-- return control back to the processing script
+1. Add logic to prevent infinite call to process() from Webdriver exception
+2. Handle records that display errors (as in the broken record detector) - if required, to be determined by testing
 
-NEXT THING TO DO:
 
 
 
