@@ -1,27 +1,19 @@
 import win32com.client
-from selenium import webdriver
 from selenium.webdriver import Firefox
-from selenium.webdriver import FirefoxOptions
 from selenium.common.exceptions import *
-from selenium.webdriver.common.action_chains import ActionChains
-from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.firefox.firefox_binary import FirefoxBinary
-
-import subprocess
-
-
 import time, datetime, sys
-import csv
-
+from ProcessError import ProcessingError
+from Navigation import Navigation
 
 """
 Title: OSCAR Manual Amendments Script
 Compatibility: Python 3.6 or later
 Status: Draft
 Author: Danny Ruttle
-Version Date: 2019-04-04
+Version Date: 2019-04-15
 Project: ODS 3rd PArty data Automation
-Internal Ref: v0.3
+Internal Ref: v0.4
 Copyright Health and Social Care Information Centre (c) 2019
 
 Licensed under the Apache License, Version 2.0 (the "License");
@@ -52,7 +44,8 @@ The module defined below carries out the following procedures:
         a. searches for the class "MainContent_gvImportGroup_hlProcess_0"
         b. clicks the link within that table cell e.g. href="ImportManualChange.aspx?ImportGroupOrganisationID=3955786"
         c. calls enterTextToClassID() which searches for the audit field and enters the audit text
-        d. searches for a button on the target page with the ID "btnSave"
+        d. 
+        searches for a button on the target page with the ID "btnSave"
         e. btnSave is then clicked button which then returns the process back to the original URL
 4. A log is provided to audit what the script did and report any errors
 
@@ -62,6 +55,7 @@ CHANGES:
 0.1 - initial POC with half a dozen Social HQ/Providers
 0.2 - modified to action the defer on the same screen
 0.3 - version checked in ***without*** TOO MANY REDIRECTS issue fixed
+0.4 - Firefox version with first stab at removing too many redirects handlers
 
 TO DO:
 
@@ -74,8 +68,6 @@ TO DO:
 
 NEXT THING TO DO:
 
-Create a new browser instance on each call! - NOPE
-Identify when the 
 
 
 """
@@ -89,20 +81,25 @@ class ManAmend:
 
         binary = FirefoxBinary('C:\\Program Files\\Mozilla Firefox\\firefox.exe')
         self.driver = Firefox(firefox_binary=binary, executable_path='C:\\selenium\geckodriver.exe')
+        cap = self.driver.capabilities
         self.auditText = ""
         self.sleepDuration = 1
+        self.sleepDurationLong = 2
         self.processLimit = 0
-        self.refreshLimit = 50
-        self.navigateLimit = 3
+        self.navigateLimit = 3 #used to set loops when searching for elements/IDs
 
 
     def process(self, env, user, pwd, AmendID, AuditText, limit):
         """
+
         :param env:
         :param user:
         :param pwd:
+        :param AmendID:
+        :param AuditText:
+        :param limit:
+        :return:
         """
-
         self.env = env
         self.user = user
         self.pwd = pwd
@@ -110,26 +107,22 @@ class ManAmend:
         self.auditText = AuditText
         self.processLimit = limit
 
+        # create instance of Navigation class here
+        self.nav = Navigation(self.driver)
+
         #test connect:
         connectURL = "https://%s" % ( self.env )
         print("Connecting to %s......" % connectURL)
         try:
             self.driver.get(connectURL)
+            self.handleAuth()
+            self.driver.get(connectURL)
             print("Successfully connected to %s......" % connectURL)
         except UnexpectedAlertPresentException:
             print("need to authenticate when accessing home")
-            print("### self.user = %s ###" % self.user)
-            time.sleep(self.sleepDuration)
-            print("need to authenticate when accessing amendments page")
-            shell = win32com.client.Dispatch("WScript.Shell")
-            shell.Sendkeys("corp\\%s" % self.user)
-            time.sleep(3)
-            shell.Sendkeys("{TAB}")
-            time.sleep(3)
-            shell.Sendkeys(self.pwd)
-            time.sleep(3)
-            shell.Sendkeys("{ENTER}")
-            time.sleep(3)
+            self.handleAuth()
+            self.driver.get(connectURL)
+
         time.sleep(self.sleepDuration) #allow time to login manually
 
         # logging vars
@@ -139,78 +132,52 @@ class ManAmend:
 
         # connect to the environment (not part of the test) to prompt authentication
         amendCount = 0
-        while amendCount < self.processLimit:
-            #if self.detectTooManyRedirects():
+        self.processState = True
+        while amendCount < self.processLimit and self.processState == True:
             self.processAmendment()
-            self.driver.delete_all_cookies()
-
             amendCount += 1
 
         # CLOSE THE SCRIPT LOGFILE:
         self.endFileTime = datetime.datetime.now().strftime("%Y-%m-%dT%H%M%S%Z")  # can't include ":" in filenames
         self.logFile.write("processing completed: %s\n" % self.endFileTime)
         self.logFile.close()
+        self.driver.quit()
+
 
     def processAmendment(self):
         """
         """
         OrganisationID = 0 # Org being processed - required for audit
-
-        #AmendmentsURL = "https://%s:%s@%s/Exchange/ImportGroupManualChanges.aspx?ID=%s" % (self.user, self.pwd, self.env, self.amendID)
         AmendmentsURL = "https://%s/Exchange/ImportGroupManualChanges.aspx?ID=%s" % (self.env, self.amendID)
-
         print("Import Group to be processed = %s" % AmendmentsURL)
 
         # if we can't get the organisationID then exit
         try:
             self.driver.get(AmendmentsURL)
         except UnexpectedAlertPresentException:
-            print("### self.user = %s ###" % self.user)
-            time.sleep(self.sleepDuration)
-            print("need to authenticate when accessing amendments page")
-            shell = win32com.client.Dispatch("WScript.Shell")
-            shell.Sendkeys("corp\\%s" % self.user)
-            time.sleep(3)
-            shell.Sendkeys("{TAB}")
-            time.sleep(3)
-            shell.Sendkeys(self.pwd)
-            time.sleep(3)
-            shell.Sendkeys("{ENTER}")
-            time.sleep(3)
+            self.handleAuth()
             self.driver.get(AmendmentsURL)
-
-            #alert = self.driver.switch_to.window(self.driver.window_handles[1])
-            #alert = self.driver.switch_to.alert()
-            #time.sleep(self.sleepDuration)
-            #alert.send_keys("corp\\%s" % self.user)
-            #alert.send_keys(Keys.TAB)
-            #alert.send_keys("%s" % self.pwd)
-            #alert.accept()
-
-        time.sleep(self.sleepDuration * 2)
-        #self.detectTooManyRedirects()
-
+        time.sleep(self.sleepDurationLong)
 
         try:
-            OrganisationID = self.getOrganisationIDfromProcessLink("MainContent_gvImportGroup_hlProcess_0")
+            OrganisationID = self.nav.getOrganisationIDfromProcessLink("MainContent_gvImportGroup_hlProcess_0")
         except:
             msg = '"System Exit!","Unable to retrieve OrganisationID"\n'
             self.logFile.write(msg)
-            #sys.exit()
+            self.procesState = False
 
-
-        if self.checkNotes("MainContent_gvImportGroup_aNotes_0"):
+        if self.nav.checkNotes("MainContent_gvImportGroup_aNotes_0"):
             msg = '"%s","Processing Notes Found","processing deferred"\n' % OrganisationID
             print(msg)
             self.logFile.write(msg)
             time.sleep(self.sleepDuration)
-            if self.navigateToClassID("MainContent_gvImportGroup_chkDefer_0"):
+            if self.nav.navigateToClassID("MainContent_gvImportGroup_chkDefer_0"):
                 msg = '"%s","Defer checkbox clicked and marked to be deferred"\n' % OrganisationID
                 print(msg)
                 self.logFile.write(msg)
                 time.sleep(self.sleepDuration)
                 # for next step selenium claims that ctl00$MainContent$btnDefer is a list so changed to ID and btnDefer
-                if self.navigateToClassID( "btnDefer" ):
+                if self.nav.navigateToClassID( "btnDefer" ):
                     msg = '"%s","Defer button clicked and successfully selected for confirmation to be deferred"\n' % OrganisationID
                     print(msg)
                     self.logFile.write(msg)
@@ -223,53 +190,53 @@ class ManAmend:
                     self.logFile.write(msg)
 
         else:
-            if self.navigateToClassID("MainContent_gvImportGroup_hlProcess_0"):
+            if self.nav.navigateToClassID("MainContent_gvImportGroup_hlProcess_0"):
                 msg = '"%s","navigate to record processed successfully"\n' % OrganisationID
                 print( msg )
                 self.logFile.write(msg)
                 time.sleep( self.sleepDuration )
                 try:
-                    # handle save alert
+                    # handle save alert ### need to see more examples of these so sceanrios can be tested ###
                     self.driver.switch_to.alert.dismiss()
                 except:
-                    pass # it nerer happened!
+                    pass # it never happened!
 
 
-                if self.navigateToClassID("MainContent_btnSave"):
+                if self.nav.navigateToClassID("MainContent_btnSave"):
                     msg = '"%s","accepting amendment processed successfully"\n' % OrganisationID
                     print(msg)
                     self.logFile.write(msg)
-                    time.sleep(self.sleepDuration * 2)
+                    time.sleep(self.sleepDurationLong)
                     """
                     Need to detect if there's an error on the page and by pass for now
                     """
-                    if self._handlePrcoessingError(): # may need to put a conditional here
-                        # abort and log
-                        msg = '"%s","unable to save record as Errors exist."\n' % OrganisationID
+                    procErr = ProcessingError(OrganisationID, self.driver, self.logFile)
+                    if procErr.hasErrors(): # may need to put a conditional here
+                        procErr.handleProcessingError()
+                        msg = '"%s","Errors resolved."\n' % OrganisationID
                         print(msg)
                         self.logFile.write(msg)
-                    else:
-                        if self.enterTextToClassID("MainContent_AuditReason1_txtAuditReason"):
-                            msg = '"%s","audit text entry entered successfully"\n' % OrganisationID
+                    if self.nav.enterTextToClassID("MainContent_AuditReason1_txtAuditReason", self.auditText):
+                        msg = '"%s","audit text entry entered successfully"\n' % OrganisationID
+                        print( msg )
+                        self.logFile.write(msg)
+                        time.sleep( self.sleepDuration )
+                        # Click the Audit reason Button
+                        if self.nav.navigateToClassID("MainContent_AuditReason1_btnAuditReasonOk"):
+                            msg = '"%s","audit button press processed successfully"\n' % OrganisationID
                             print( msg )
                             self.logFile.write(msg)
                             time.sleep( self.sleepDuration )
-                            # Click the Audit reason Button
-                            if self.navigateToClassID("MainContent_AuditReason1_btnAuditReasonOk"):
-                                msg = '"%s","audit button press processed successfully"\n' % OrganisationID
-                                print( msg )
-                                self.logFile.write(msg)
-                                time.sleep( self.sleepDuration )
-                            else:
-                                msg = '"%s","audit button press failed"\n' % OrganisationID
-                                print( msg )
-                                self.logFile.write(msg)
-                                time.sleep( self.sleepDuration )
                         else:
-                            msg = '"%s","audit text reason entry failed"\n' % OrganisationID
+                            msg = '"%s","audit button press failed"\n' % OrganisationID
                             print( msg )
                             self.logFile.write(msg)
                             time.sleep( self.sleepDuration )
+                    else:
+                        msg = '"%s","audit text reason entry failed"\n' % OrganisationID
+                        print( msg )
+                        self.logFile.write(msg)
+                        time.sleep( self.sleepDuration )
                 else:
                     msg = '"%s","audit text entry processing failed"\n' % OrganisationID
                     print( msg )
@@ -280,198 +247,24 @@ class ManAmend:
                 print( msg )
                 self.logFile.write(msg)
                 time.sleep( self.sleepDuration )
+        return self.processState
 
-    def detectTooManyRedirects(self):
-        try:
-            self.target = self.driver.find_element_by_class_name("error-code")
-            if self.clearTooManyRedirects() == False:
-                msg = '"Error"unable to clear TOO MANY REDIRECTS issue"\n'
-                print(msg)
-                self.logFile.write(msg)
-                return False
-                sys.exit()  # for now - may just log it - or quit and restart the driver!!!
-            else:
-                msg = '"Resolved","Successfully worked around TOO MANY REDIRECTS issue"\n'
-                print(msg)
-                self.logFile.write(msg)
-                return True
-        except NoSuchElementException:
-            return True
-
-    def clearTooManyRedirects(self, classToFind):
+    def handleAuth(self):
         """
-
-        :return: boolean (True if the TOO MANY REDIRECTS page has gone)
+        Simulates what AutoIt did previously
+        :return:
         """
-
-        result = False
-
-        attempts = 0
-        while attempts < self.refreshLimit:
-            try:
-                self.target = self.driver.find_element_by_class_name( classToFind )  # this is present in the error page in Chrome
-                # maybe check the text if ambiguous results are seen
-                self.driver.refresh()
-                attempts += 1
-                time.sleep(1)
-
-            except NoSuchElementException:
-                result = True
-                break
-
-        return result
-
-
-
-
-    def navigateToClassID(self, ID):
-        """
-        Navigates and clicks the element supplied in ID
-        :param ID: String = ID of widget to be clicked
-        :return: Boolean
-        """
-        result = False
-        attempts = 0
-        while attempts < self.navigateLimit:
-            try:
-                self.target = self.driver.find_element_by_id( ID )
-                self.target.click()
-                result = True
-                break
-            except StaleElementReferenceException:
-                attempts += 1
-                time.sleep(1)
-        return result
-
-    def searchforClassID(self, ID):
-        """
-        Navigates and clicks the element supplied in ID
-        :param ID: String = ID of widget to be clicked
-        :return: Boolean
-        """
-        result = False
-        attempts = 0
-        while attempts < self.navigateLimit:
-            try:
-                self.target = self.driver.find_element_by_id( ID )
-                result = True
-                break
-            except StaleElementReferenceException:
-                attempts += 1
-                time.sleep(1)
-        return result
-
-
-    def navigateByName(self, Name):
-        """
-        Navigates and clicks the element supplied in Name
-
-        :param Name: String = Name of widget to be clicked
-        :return: Boolean
-        """
-        result = False
-        attempts = 0
-        while attempts < self.navigateLimit:
-            try:
-                self.target = self.driver.find_elements_by_name( Name )
-                self.target.click()
-                result = True
-                break
-            except StaleElementReferenceException:
-                attempts += 1
-                time.sleep(1)
-        return result
-
-    def enterTextToClassID(self, ID):
-        """
-        :param ID: String = ID of widget to be clicked
-        :return: Boolean
-        """
-        result = False
-        attempts = 0
-        while attempts < self.navigateLimit:
-            try:
-                self.target = self.driver.find_element_by_id( ID )
-                self.target.send_keys(self.auditText)
-                result = True
-                break
-            except StaleElementReferenceException:
-                attempts += 1
-                time.sleep(1)
-            except ElementNotVisibleException:
-                attempts += 1
-                time.sleep(1)
-        return result
-
-    def checkNotes(self, ID):   # ID = MainContent_gvImportGroup_aNotes_0
-        """
-        Class only appears if Notes are present
-        Notes are only present if it's not a straightforward click
-        So need to look for this class and:
-        if present: Defer
-        else: Accept
-        """
-
-        result = False
-        attempts = 0
-        while attempts < 3:
-            try:
-                self.target = self.driver.find_element_by_id(ID)
-                result = True
-                break
-            except StaleElementReferenceException:
-                attempts += 1
-                time.sleep(1)
-            except NoSuchElementException:
-                attempts += 1
-                time.sleep(1)
-                result = False
-                break
-        return result
-
-    def getOrganisationIDfromProcessLink(self, ID):
-        attempts = 0
-        organisationID = 0
-        while attempts < self.navigateLimit:
-            try:
-                self.target = self.driver.find_element_by_id( ID )
-                linkText = self.target.get_attribute("href")
-                OrganisationID = linkText.split("=")[1]
-                break
-            except StaleElementReferenceException:
-                attempts += 1
-                time.sleep(1)
-        return OrganisationID
-
-
-
-# not implemented yet!!!!
-
-
-    def _handlePrcoessingError(self):
-        '''
-        This method is here to identify errors and take appropriate steps - eg. short name error
-        :return:  boolean
-        '''
-        # simple binary return...
-        return False # stubbed for now
-        """
-        try:
-            errors = self.driver.find_element_by_id("MainContent_CustomValidationSummary1")
-            return True
-        except:
-            return False
-        """
-#        uls = errors.find_elements_by_tag_name("ul")
-#        if len(uls) > 0:
-#            for ul in uls:
-#                li = ul.find_elements_by_tag_name("li")
-#                for item in li:
-#                    outputString = '"%s","\n' % (item.text)
-#                    # self.outputFile.write(outputString)
-#                    # print errors to console
-#                    print(outputString)
-#                    self.logFile.write("Error reported for row %s\n" % outputString)
+        time.sleep(self.sleepDuration)
+        print("authentication process called")
+        shell = win32com.client.Dispatch("WScript.Shell")
+        shell.Sendkeys("corp\\%s" % self.user)
+        time.sleep(self.sleepDurationLong)
+        shell.Sendkeys("{TAB}")
+        time.sleep(self.sleepDurationLong)
+        shell.Sendkeys(self.pwd)
+        time.sleep(self.sleepDurationLong)
+        shell.Sendkeys("{ENTER}")
+        time.sleep(self.sleepDurationLong)
 
 if __name__ == "__main__":
     args = sys.argv
