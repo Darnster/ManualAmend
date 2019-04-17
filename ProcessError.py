@@ -62,10 +62,10 @@ class ProcessingError:
                     return True
             else:
                 if self.nav.navigateToClassID("MainContent_btnDefer"):
-                    msg = '"%s","Defer Button clicked after discovering complex error on Org Maintenance Screen"\n' % OrganisationID
+                    msg = '"%s","Defer Button clicked after discovering complex error on Org Maintenance Screen"\n' % self.OrganisationID
                     print(msg)
-                self.logFile.write(msg)
-                time.sleep( self.sleepDuration )
+                    self.logFile.write(msg)
+                    time.sleep( self.sleepDuration )
                 return True
 
     def addShortName(self):

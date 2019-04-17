@@ -79,9 +79,7 @@ class ManAmend:
         """
         self.fileTime = datetime.datetime.now().strftime("%Y-%m-%dT%H%M%S%Z")  # can't include ":" in filenames
 
-        binary = FirefoxBinary('C:\\Program Files\\Mozilla Firefox\\firefox.exe')
-        self.driver = Firefox(firefox_binary=binary, executable_path='C:\\selenium\geckodriver.exe')
-        cap = self.driver.capabilities
+        self.binary = FirefoxBinary('C:\\Program Files\\Mozilla Firefox\\firefox.exe')
         self.auditText = ""
         self.sleepDuration = 1
         self.sleepDurationLong = 2
@@ -107,6 +105,8 @@ class ManAmend:
         self.auditText = AuditText
         self.processLimit = limit
 
+        self.driver = Firefox(firefox_binary=self.binary, executable_path='C:\\selenium\geckodriver.exe')
+
         # create instance of Navigation class here
         self.nav = Navigation(self.driver)
 
@@ -123,6 +123,7 @@ class ManAmend:
             self.handleAuth()
             self.driver.get(connectURL)
 
+
         time.sleep(self.sleepDuration) #allow time to login manually
 
         # logging vars
@@ -133,9 +134,14 @@ class ManAmend:
         # connect to the environment (not part of the test) to prompt authentication
         amendCount = 0
         self.processState = True
-        while amendCount < self.processLimit and self.processState == True:
-            self.processAmendment()
-            amendCount += 1
+        try:
+            while amendCount < self.processLimit and self.processState == True:
+                self.processAmendment()
+                amendCount += 1
+        except WebDriverException:
+            self.restartDriver("WebDriverException in process() > Loop")
+
+
 
         # CLOSE THE SCRIPT LOGFILE:
         self.endFileTime = datetime.datetime.now().strftime("%Y-%m-%dT%H%M%S%Z")  # can't include ":" in filenames
@@ -143,6 +149,16 @@ class ManAmend:
         self.logFile.close()
         self.driver.quit()
 
+    def restartDriver(self, outputMessage):
+        print(outputMessage)
+        time.sleep(self.sleepDurationLong)
+        self.driver.quit()
+        outputMessage = "Quiting driver due to %s" % outputMessage
+        print(outputMessage)
+        outputMessage = "Driver disposed now calling process() due to %s" % outputMessage
+        print(outputMessage)
+        time.sleep(self.sleepDurationLong)
+        self.process(self.env, self.user, self.pwd, self.amendID, self.auditText, self.processLimit)
 
     def processAmendment(self):
         """
@@ -157,6 +173,10 @@ class ManAmend:
         except UnexpectedAlertPresentException:
             self.handleAuth()
             self.driver.get(AmendmentsURL)
+        except WebDriverException:
+            outputMessage = "WebDriverException in processAmendment()"
+            self.restartDriver(outputMessage)
+
         time.sleep(self.sleepDurationLong)
 
         try:
@@ -227,6 +247,15 @@ class ManAmend:
                             print( msg )
                             self.logFile.write(msg)
                             time.sleep( self.sleepDuration )
+                        try:
+                            self.handleClose()
+                            msg = '"%s","Closure process completed"\n' % OrganisationID
+                            print( msg )
+                            self.logFile.write(msg)
+                            time.sleep( self.sleepDuration )
+                        except:
+                            # assume nothing to do here
+                            pass
                         else:
                             msg = '"%s","audit button press failed"\n' % OrganisationID
                             print( msg )
@@ -264,6 +293,18 @@ class ManAmend:
         shell.Sendkeys(self.pwd)
         time.sleep(self.sleepDurationLong)
         shell.Sendkeys("{ENTER}")
+        time.sleep(self.sleepDurationLong)
+
+    def handleClose(self):
+        self.nav.navigateToClassID("MainContent_wizTasks_ctl17_chkCloseOperationally")
+        time.sleep(self.sleepDurationLong)
+        self.nav.navigateToClassID("MainContent_wizTasks_ctl17_btnNextStart")
+        time.sleep(self.sleepDurationLong)
+        self.nav.navigateToClassID("MainContent_wizTasks_ctl18_btnFinishClose")
+        time.sleep(self.sleepDurationLong)
+        self.nav.enterTextToClassID("MainContent_AuditReason1_txtAuditReason", self.auditText)
+        time.sleep(self.sleepDurationLong)
+        self.nav.navigateToClassID("MainContent_AuditReason1_btnAuditReasonOk")
         time.sleep(self.sleepDurationLong)
 
 if __name__ == "__main__":
