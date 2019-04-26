@@ -13,7 +13,7 @@ Status: Draft
 Author: Danny Ruttle
 Version Date: 2019-04-17
 Project: ODS 3rd PArty data Automation
-Internal Ref: v0.5
+Internal Ref: v0.6
 Copyright Health and Social Care Information Centre (c) 2019
 
 Licensed under the Apache License, Version 2.0 (the "License");
@@ -57,6 +57,8 @@ CHANGES:
 0.3 - version checked in ***without*** TOO MANY REDIRECTS issue fixed
 0.4 - Firefox version with first stab at removing too many redirects handlers
 0.5 - Truncate short name if that error appears. Webdriver Exception first stab
+0.6 - simplified logging and mmoved creation of the log file to __init__, refactored record processing
+      so new methods handleDefer and handle Audit added
 
 TO DO:
 
@@ -70,36 +72,40 @@ TO DO:
 
 class ManAmend:
 
-    def __init__(self):
-        """
-        """
-        self.fileTime = datetime.datetime.now().strftime("%Y-%m-%dT%H%M%S%Z")  # can't include ":" in filenames
-
-        self.binary = FirefoxBinary('C:\\Program Files\\Mozilla Firefox\\firefox.exe')
-        self.auditText = ""
-        self.sleepDuration = 1
-        self.sleepDurationLong = 2
-        self.processLimit = 0
-        self.navigateLimit = 3 #used to set loops when searching for elements/IDs
-
-
-    def process(self, env, user, pwd, AmendID, AuditText, limit):
+    def __init__(self, env, user, pwd, AmendID, AuditText, limit):
         """
 
-        :param env:
-        :param user:
-        :param pwd:
-        :param AmendID:
-        :param AuditText:
-        :param limit:
-        :return:
+        :param env: OSCAR environment
+        :param user: user network name (domain not reauired)
+        :param pwd: network password
+        :param AmendID: import group to be processed
+        :param AuditText: Appropriate message
+        :param limit: allows batching of records to be controlled
         """
+        # process args here
         self.env = env
         self.user = user
         self.pwd = pwd
         self.amendID = AmendID
         self.auditText = AuditText
         self.processLimit = limit
+        self.fileTime = datetime.datetime.now().strftime("%Y-%m-%dT%H%M%S%Z")  # can't include ":" in filenames
+
+        self.binary = FirefoxBinary('C:\\Program Files\\Mozilla Firefox\\firefox.exe')
+        self.sleepDuration = 1
+        self.sleepDurationLong = 2
+        self.processLimit = 0
+        self.navigateLimit = 3 #used to set loops when searching for elements/IDs
+
+        # logging vars
+        self.logFileName = "ScriptLog_ManualAmends_%s_%s_%s.csv" % (self.env, self.amendID, self.fileTime)
+        self.logFile = open(self.logFileName, "w")
+
+
+
+    def process(self):
+        """
+        """
 
         self.driver = Firefox(firefox_binary=self.binary, executable_path='C:\\selenium\geckodriver.exe')
 
@@ -119,12 +125,8 @@ class ManAmend:
             self.handleAuth()
             self.driver.get(connectURL)
 
-
         time.sleep(self.sleepDuration) #allow time to login manually
 
-        # logging vars
-        self.logFileName = "ScriptLog_ManualAmends_%s_%s_%s.csv" % (self.env, self.amendID, self.fileTime)
-        self.logFile = open(self.logFileName, "w")
         self.logFile.write("processing started: %s\n" % self.fileTime)
 
         # connect to the environment (not part of the test) to prompt authentication
@@ -136,8 +138,6 @@ class ManAmend:
                 amendCount += 1
         except WebDriverException:
             self.restartDriver("WebDriverException in process() > Loop")
-
-
 
         # CLOSE THE SCRIPT LOGFILE:
         self.endFileTime = datetime.datetime.now().strftime("%Y-%m-%dT%H%M%S%Z")  # can't include ":" in filenames
@@ -154,7 +154,7 @@ class ManAmend:
         outputMessage = "Driver disposed now calling process() due to %s" % outputMessage
         print(outputMessage)
         time.sleep(self.sleepDurationLong)
-        self.process(self.env, self.user, self.pwd, self.amendID, self.auditText, self.processLimit)
+        self.process()
 
     def processAmendment(self):
         """
@@ -183,45 +183,21 @@ class ManAmend:
             self.procesState = False
 
         if self.nav.checkNotes("MainContent_gvImportGroup_aNotes_0"):
-            msg = '"%s","Processing Notes Found","processing deferred"\n' % OrganisationID
-            print(msg)
+            # too complex to automate so just defer it
+            self.handleDefer()
+            msg = '"%s","Defer","Processing Notes Found\n"' % OrganisationID
             self.logFile.write(msg)
-            time.sleep(self.sleepDuration)
-            if self.nav.navigateToClassID("MainContent_gvImportGroup_chkDefer_0"):
-                msg = '"%s","Defer checkbox clicked and marked to be deferred"\n' % OrganisationID
-                print(msg)
-                self.logFile.write(msg)
-                time.sleep(self.sleepDuration)
-                # for next step selenium claims that ctl00$MainContent$btnDefer is a list so changed to ID and btnDefer
-                if self.nav.navigateToClassID( "btnDefer" ):
-                    msg = '"%s","Defer button clicked and successfully selected for confirmation to be deferred"\n' % OrganisationID
-                    print(msg)
-                    self.logFile.write(msg)
-                    time.sleep(self.sleepDuration)
-                    # there's also an alert dialog "Are you sure you want to defer all the selected manual amendments?"
-                    # with options Yes or Cancel - I so alert.accept() is probably the way forward
-                    self.driver.switch_to.alert.accept()
-                    msg = "%s, deferred alert box successfully accepted\n" % OrganisationID
-                    print(msg)
-                    self.logFile.write(msg)
 
-        else:
+        else: #attempt to process
             if self.nav.navigateToClassID("MainContent_gvImportGroup_hlProcess_0"):
-                msg = '"%s","navigate to record processed successfully"\n' % OrganisationID
-                print( msg )
-                self.logFile.write(msg)
                 time.sleep( self.sleepDuration )
                 try:
-                    # handle save alert ### need to see more examples of these so sceanrios can be tested ###
+                    # handle save alert ### need to see more examples of these so scenarios can be tested ###
                     self.driver.switch_to.alert.dismiss()
                 except:
                     pass # it never happened!
 
-
                 if self.nav.navigateToClassID("MainContent_btnSave"):
-                    msg = '"%s","accepting amendment processed successfully"\n' % OrganisationID
-                    print(msg)
-                    self.logFile.write(msg)
                     time.sleep(self.sleepDurationLong)
                     """
                     Need to detect if there's an error on the page and by pass for now
@@ -229,49 +205,24 @@ class ManAmend:
                     procErr = ProcessingError(OrganisationID, self.driver, self.logFile)
                     if procErr.hasErrors(): # may need to put a conditional here
                         procErr.handleProcessingError()
-                        msg = '"%s","Errors resolved."\n' % OrganisationID
-                        print(msg)
-                        self.logFile.write(msg)
-                    if self.nav.enterTextToClassID("MainContent_AuditReason1_txtAuditReason", self.auditText):
-                        msg = '"%s","audit text entry entered successfully"\n' % OrganisationID
+                    # Audit panel and buttons have the same ID
+                    self.handleAudit()
+
+                    try:
+                        self.handleClose()
+                        msg = '"%s","ProcessClose","Closure process completed"\n' % OrganisationID
                         print( msg )
                         self.logFile.write(msg)
                         time.sleep( self.sleepDuration )
-                        # Click the Audit reason Button
-                        if self.nav.navigateToClassID("MainContent_AuditReason1_btnAuditReasonOk"):
-                            msg = '"%s","audit button press processed successfully"\n' % OrganisationID
-                            print( msg )
-                            self.logFile.write(msg)
-                            time.sleep( self.sleepDuration )
-                        try:
-                            self.handleClose()
-                            msg = '"%s","Closure process completed"\n' % OrganisationID
-                            print( msg )
-                            self.logFile.write(msg)
-                            time.sleep( self.sleepDuration )
-                        except:
-                            # assume nothing to do here
-                            pass
-                        else:
-                            msg = '"%s","audit button press failed"\n' % OrganisationID
-                            print( msg )
-                            self.logFile.write(msg)
-                            time.sleep( self.sleepDuration )
-                    else:
-                        msg = '"%s","audit text reason entry failed"\n' % OrganisationID
-                        print( msg )
-                        self.logFile.write(msg)
-                        time.sleep( self.sleepDuration )
-                else:
-                    msg = '"%s","audit text entry processing failed"\n' % OrganisationID
-                    print( msg )
-                    self.logFile.write(msg)
-                    time.sleep( self.sleepDuration )
+                    except:
+                        # assume nothing to do here
+                        pass
+
             else:
-                msg = '"%s","navigate to record processing failed"\n' % OrganisationID
-                print( msg )
+                msg = "End of records reached"
                 self.logFile.write(msg)
                 time.sleep( self.sleepDuration )
+                self.procesState = False
         return self.processState
 
     def handleAuth(self):
@@ -298,10 +249,24 @@ class ManAmend:
         time.sleep(self.sleepDurationLong)
         self.nav.navigateToClassID("MainContent_wizTasks_ctl18_btnFinishClose")
         time.sleep(self.sleepDurationLong)
+        self.handleAudit()
+
+
+    def handleDefer(self, OrganisationID):
+        self.nav.navigateToClassID("MainContent_gvImportGroup_chkDefer_0")
+        time.sleep(self.sleepDuration)
+        self.nav.navigateToClassID("btnDefer")
+        time.sleep(self.sleepDuration)
+        # there's also an alert dialog "Are you sure you want to defer all the selected manual amendments?"
+        # with options Yes or Cancel - I so alert.accept() is probably the way forward
+        self.driver.switch_to.alert.accept()
+
+    def handleAudit(self):
         self.nav.enterTextToClassID("MainContent_AuditReason1_txtAuditReason", self.auditText)
-        time.sleep(self.sleepDurationLong)
+        time.sleep(self.sleepDuration)
+        # Click the Audit reason Button
         self.nav.navigateToClassID("MainContent_AuditReason1_btnAuditReasonOk")
-        time.sleep(self.sleepDurationLong)
+        time.sleep(self.sleepDuration)
 
 if __name__ == "__main__":
     args = sys.argv
@@ -312,8 +277,8 @@ if __name__ == "__main__":
         amendID = sys.argv[4]
         auditText = sys.argv[5] # "CQC ALIGNMENT - SELENIUM AUTOMATED ACCEPTANCE"
         recordsToProces = sys.argv[6]
-        MA = ManAmend()
-        MA.process(env, user, pwd, amendID, auditText, int(recordsToProces))
+        MA = ManAmend(env, user, pwd, amendID, auditText, int(recordsToProces))
+        MA.process()
     else:
         msg = "Please provide the following arguments:\n"
         msg+= "1. environment, e.g. OSCAR-TESTSP\n"

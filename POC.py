@@ -1,4 +1,4 @@
-from selenium.webdriver import Chrome
+from selenium.webdriver import Firefox
 from selenium.common.exceptions import *
 
 import time, sys
@@ -13,7 +13,7 @@ class SelTest:
         """
         """
 
-        self.driver = Chrome( executable_path='C:\\selenium\ChromeDriver.exe')
+        self.driver = Firefox( executable_path='C:\\selenium\geckodriver.exe')
         self.sleepDuration = 1
         self.connectURL = ""
         self.navigateLimit = 3
