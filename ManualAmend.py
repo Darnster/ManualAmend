@@ -34,7 +34,7 @@ WHAT THIS CODE DOES:
 The module defined below carries out the following procedures:
 
 1. Opens a URL to a page that contains records requiring manual amendments (post import)
-2. It authenticates using the Selenium chrome Web Driver
+2. It authenticates using the Selenium Web Driver and the win32 shell scripting python library
 3. It always acts on the record at the top of the list, processing that and then refreshing the page containing manual amendments
 4. It searches for the element "MainContent_gvImportGroup_aNotes_0" (this will be in the first entry only)
     if this element is present
@@ -44,9 +44,10 @@ The module defined below carries out the following procedures:
         a. searches for the class "MainContent_gvImportGroup_hlProcess_0"
         b. clicks the link within that table cell e.g. href="ImportManualChange.aspx?ImportGroupOrganisationID=3955786"
         c. calls enterTextToClassID() which searches for the audit field and enters the audit text
-        d. 
-        searches for a button on the target page with the ID "btnSave"
+        d. searches for a button on the target page with the ID "btnSave"
         e. btnSave is then clicked button which then returns the process back to the original URL
+        f. it handles for the presence of any errors reported via the OSCAR Error pane and implements a fix for simple errors
+        g. it detects closing records and handles the operational closure in the task screen.
 4. A log is provided to audit what the script did and report any errors
 
 
@@ -62,9 +63,10 @@ CHANGES:
 
 TO DO:
 
-1. Add logic to prevent infinite call to process() from Webdriver exception
+1. Add logic to prevent infinite call to process() from Webdriver exception - done in v0.6 but not tested
 2. Handle records that display errors (as in the broken record detector) - if required, to be determined by testing
-
+3. Switch to using a config file for running the application
+4. Add a crypto type method for storing domain passwords
 
 
 
