@@ -13,7 +13,7 @@ Status: Draft
 Author: Danny Ruttle
 Version Date: 2019-04-17
 Project: ODS 3rd PArty data Automation
-Internal Ref: v0.6
+Internal Ref: v0.7
 Copyright Health and Social Care Information Centre (c) 2019
 
 Licensed under the Apache License, Version 2.0 (the "License");
@@ -58,8 +58,10 @@ CHANGES:
 0.3 - version checked in ***without*** TOO MANY REDIRECTS issue fixed
 0.4 - Firefox version with first stab at removing too many redirects handlers
 0.5 - Truncate short name if that error appears. Webdriver Exception first stab
-0.6 - simplified logging and mmoved creation of the log file to __init__, refactored record processing
+0.6 - simplified logging and moved creation of the log file to __init__, refactored record processing
       so new methods handleDefer and handle Audit added
+0.7 - Added handling to defer re-open requests for manual review.  Refactored Manualamend to run the process with Navigation and 
+      ProcessError as separate modules
 
 TO DO:
 
@@ -67,6 +69,7 @@ TO DO:
 2. Handle records that display errors (as in the broken record detector) - if required, to be determined by testing
 3. Switch to using a config file for running the application
 4. Add a crypto type method for storing domain passwords
+5. add logging class/method which opens, appends then closes so progress can be monitored
 
 
 
@@ -96,8 +99,8 @@ class ManAmend:
         self.binary = FirefoxBinary('C:\\Program Files\\Mozilla Firefox\\firefox.exe')
         self.sleepDuration = 1
         self.sleepDurationLong = 2
-        self.processLimit = 0
         self.navigateLimit = 3 #used to set loops when searching for elements/IDs
+        self.deferNextRecord = False # used to defer after discovering a ReOpen request
 
         # logging vars
         self.logFileName = "ScriptLog_ManualAmends_%s_%s_%s.csv" % (self.env, self.amendID, self.fileTime)
@@ -184,9 +187,10 @@ class ManAmend:
             self.logFile.write(msg)
             self.procesState = False
 
-        if self.nav.checkNotes("MainContent_gvImportGroup_aNotes_0"):
+        if self.nav.checkNotes("MainContent_gvImportGroup_aNotes_0") or self.deferNextRecord is True:
             # too complex to automate so just defer it
-            self.handleDefer()
+            self.handleDefer( OrganisationID )
+            self.deferNextRecord = False
             msg = '"%s","Defer","Processing Notes Found\n"' % OrganisationID
             self.logFile.write(msg)
 
@@ -209,22 +213,26 @@ class ManAmend:
                         procErr.handleProcessingError()
                     # Audit panel and buttons have the same ID
                     self.handleAudit()
-
+                else:
                     try:
                         self.handleClose()
                         msg = '"%s","ProcessClose","Closure process completed"\n' % OrganisationID
-                        print( msg )
+                        print(msg)
                         self.logFile.write(msg)
-                        time.sleep( self.sleepDuration )
+                        time.sleep(self.sleepDuration)
                     except:
                         # assume nothing to do here
                         pass
 
-            else:
-                msg = "End of records reached"
-                self.logFile.write(msg)
-                time.sleep( self.sleepDuration )
-                self.procesState = False
+                    try:
+                        self.handleReOpenDefer()
+                        msg = '"%s","ProcessReOpen","ReOpen process flagged to defer"\n' % OrganisationID
+                        print(msg)
+                        self.logFile.write(msg)
+                        time.sleep(self.sleepDuration)
+                    except:
+                        # assume nothing to do here
+                        pass
         return self.processState
 
     def handleAuth(self):
@@ -253,6 +261,12 @@ class ManAmend:
         time.sleep(self.sleepDurationLong)
         self.handleAudit()
 
+    def handleReOpenDefer(self):
+        # see if the openlegally option is available
+        if self.nav.searchforClassID("MainContent_wizTasks_ctl17_chkReOpenLegally"):
+            self.deferNextRecord = True
+            time.sleep(self.sleepDurationLong)
+            self.nav.navigateToClassID("MainContent_wizTasks_ctl17_btnCancelStart")
 
     def handleDefer(self, OrganisationID):
         self.nav.navigateToClassID("MainContent_gvImportGroup_chkDefer_0")
