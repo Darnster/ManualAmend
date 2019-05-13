@@ -2,9 +2,10 @@ import time
 from Navigation import Navigation
 
 class ProcessingError:
-    def __init__(self, OrganisationID, driver, logfile):
+    def __init__(self, OrganisationID, driver, logfile, logFileName):
         self.driver = driver
         self.logFile = logfile
+        self.logFileName = logFileName
         self.OrganisationID = OrganisationID
         self.errList = []
         self.sleepDuration = 2
@@ -35,11 +36,10 @@ class ProcessingError:
             for ul in uls:
                 li = ul.find_elements_by_tag_name("li")
                 for item in li:
-                    outputString = '%s,%s"\n' % (self.OrganisationID, item.text)
+                    outputString = '"%s","%s"\n' % (self.OrganisationID, item.text)
                     self.errList.append(item.text) # don't require ID for processing
-                    self.logFile.write(outputString)
+                    self.WriteLog( outputString )
                     # print errors to console
-                    print(outputString)
 
         return self.errList
 
@@ -57,16 +57,16 @@ class ProcessingError:
         for err in self.errList:
             if err in self.getFixableErrors():
                 if err == 'Organisation Short Name required when organisation name longer than 40 characters':
-                    if self.addShortName():
-                        self.nav.navigateToClassID("MainContent_btnSave")
-                    return True
+                    self.addShortName()
+                    self.nav.navigateToClassID("MainContent_btnSave")
+                    msg = '"%s","ProcessErrorFixed","Complex error on Org Maintenance Screen(%s)"\n' % ( self.OrganisationID, err )
+                    self.WriteLog( msg )
+                    time.sleep(self.sleepDuration)
             else:
                 if self.nav.navigateToClassID("MainContent_btnDefer"):
-                    msg = '"%s","Defer Button clicked after discovering complex error on Org Maintenance Screen"\n' % self.OrganisationID
-                    print(msg)
-                    self.logFile.write(msg)
+                    msg = '"%s","ProcessErrorDeferred","Complex error on Org Maintenance Screen(%s)"\n' % ( self.OrganisationID, err )
+                    self.WriteLog( msg )
                     time.sleep( self.sleepDuration )
-                return True
 
     def addShortName(self):
         orgNameID = "MainContent_tcDetails_tpOrganisation_ucOrganisation_txtName"
@@ -85,5 +85,7 @@ class ProcessingError:
         except:
             return False
 
-
-
+    def WriteLog(self, msg):
+        self.logFile = open(self.logFileName, 'a')
+        self.logFile.write(msg)
+        self.logFile.close()

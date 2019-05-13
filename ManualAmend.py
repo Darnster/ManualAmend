@@ -106,6 +106,13 @@ class ManAmend:
         self.logFileName = "ScriptLog_ManualAmends_%s_%s_%s.csv" % (self.env, self.amendID, self.fileTime)
         self.logFile = open(self.logFileName, "w")
 
+        self.driverRestart = True
+        #self.logFile.close()
+
+    def WriteLog(self, msg):
+        self.logFile = open(self.logFileName, 'a')
+        self.logFile.write(msg)
+        self.logFile.close()
 
 
     def process(self):
@@ -132,22 +139,28 @@ class ManAmend:
 
         time.sleep(self.sleepDuration) #allow time to login manually
 
-        self.logFile.write("processing started: %s\n" % self.fileTime)
+        self.fileWriteTime = datetime.datetime.now().strftime("%Y-%m-%dT%H%M%S%Z")  # can't include ":" in filenames
+        self.WriteLog("processing started: %s\n" % self.fileWriteTime)
 
         # connect to the environment (not part of the test) to prompt authentication
         amendCount = 0
         self.processState = True
-        try:
+
+        if self.driverRestart: # supports debug
+            try:
+                while amendCount < self.processLimit and self.processState == True:
+                    self.processAmendment()
+                    amendCount += 1
+            except WebDriverException:
+                self.restartDriver("WebDriverException in process() > Loop")
+        else:
             while amendCount < self.processLimit and self.processState == True:
                 self.processAmendment()
                 amendCount += 1
-        except WebDriverException:
-            self.restartDriver("WebDriverException in process() > Loop")
 
         # CLOSE THE SCRIPT LOGFILE:
         self.endFileTime = datetime.datetime.now().strftime("%Y-%m-%dT%H%M%S%Z")  # can't include ":" in filenames
-        self.logFile.write("processing completed: %s\n" % self.endFileTime)
-        self.logFile.close()
+        self.WriteLog("processing completed: %s\n" % self.endFileTime)
         self.driver.quit()
 
     def restartDriver(self, outputMessage):
@@ -168,7 +181,6 @@ class ManAmend:
         AmendmentsURL = "https://%s/Exchange/ImportGroupManualChanges.aspx?ID=%s" % (self.env, self.amendID)
         print("Import Group to be processed = %s" % AmendmentsURL)
 
-        # if we can't get the organisationID then exit
         try:
             self.driver.get(AmendmentsURL)
         except UnexpectedAlertPresentException:
@@ -181,10 +193,11 @@ class ManAmend:
         time.sleep(self.sleepDurationLong)
 
         try:
+            # if we can't get the organisationID then exit
             OrganisationID = self.nav.getOrganisationIDfromProcessLink("MainContent_gvImportGroup_hlProcess_0")
         except:
             msg = '"System Exit!","Unable to retrieve OrganisationID"\n'
-            self.logFile.write(msg)
+            self.WriteLog( msg )
             self.procesState = False
 
         if self.nav.checkNotes("MainContent_gvImportGroup_aNotes_0") or self.deferNextRecord is True:
@@ -192,7 +205,7 @@ class ManAmend:
             self.handleDefer( OrganisationID )
             self.deferNextRecord = False
             msg = '"%s","Defer","Processing Notes Found\n"' % OrganisationID
-            self.logFile.write(msg)
+            self.WriteLog( msg )
 
         else: #attempt to process
             if self.nav.navigateToClassID("MainContent_gvImportGroup_hlProcess_0"):
@@ -208,17 +221,23 @@ class ManAmend:
                     """
                     Need to detect if there's an error on the page and by pass for now
                     """
-                    procErr = ProcessingError(OrganisationID, self.driver, self.logFile)
+                    procErr = ProcessingError(OrganisationID, self.driver, self.logFile, self.logFileName)
                     if procErr.hasErrors(): # may need to put a conditional here
                         procErr.handleProcessingError()
                     # Audit panel and buttons have the same ID
-                    self.handleAudit()
+                    try:
+                        self.handleAudit()
+                        self.WriteLog(msg = '"%s","Processed","Routine process completed"\n' % OrganisationID)
+                    except:
+                        pass
+
                 else:
+                    # task screen related process
                     try:
                         self.handleClose()
                         msg = '"%s","ProcessClose","Closure process completed"\n' % OrganisationID
                         print(msg)
-                        self.logFile.write(msg)
+                        self.WriteLog( msg )
                         time.sleep(self.sleepDuration)
                     except:
                         # assume nothing to do here
@@ -228,7 +247,7 @@ class ManAmend:
                         self.handleReOpenDefer()
                         msg = '"%s","ProcessReOpen","ReOpen process flagged to defer"\n' % OrganisationID
                         print(msg)
-                        self.logFile.write(msg)
+                        self.WriteLog( msg )
                         time.sleep(self.sleepDuration)
                     except:
                         # assume nothing to do here
@@ -243,7 +262,8 @@ class ManAmend:
         time.sleep(self.sleepDuration)
         print("authentication process called")
         shell = win32com.client.Dispatch("WScript.Shell")
-        shell.Sendkeys("corp\\%s" % self.user)
+        login = "corp\\%s" % (self.user)
+        shell.Sendkeys(login.lower())
         time.sleep(self.sleepDurationLong)
         shell.Sendkeys("{TAB}")
         time.sleep(self.sleepDurationLong)
