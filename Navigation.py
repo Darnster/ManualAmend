@@ -30,6 +30,9 @@ class Navigation:
             except StaleElementReferenceException:
                 attempts += 1
                 time.sleep( self.sleepDurationLong )
+            except NoSuchElementException:
+                attempts += 1
+                time.sleep(self.sleepDurationLong)
         return result
 
     def searchforClassID(self, ID):

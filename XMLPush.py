@@ -101,19 +101,23 @@ class xmlPush(ManAmend):
         """
         MainContent_btnTasks
         """
-        self.nav.navigateToClassID("MainContent_btnTasks")
-        time.sleep(self.sleepDurationLong)
-        """
-        MainContent_wizTasks_ctl17_chkPushOrganisationToXml
-        """
-        self.nav.navigateToClassID("MainContent_wizTasks_ctl17_chkPushOrganisationToXml")
-        time.sleep(self.sleepDurationLong)
-        self.nav.navigateToClassID("MainContent_wizTasks_ctl17_btnNextStart")
-        time.sleep(self.sleepDurationLong)
-        # MainContent_wizTasks_ctl22_btnFinishPushOrganisationToXml
-        self.nav.navigateToClassID("MainContent_wizTasks_ctl22_btnFinishPushOrganisationToXml")
-        time.sleep(self.sleepDurationLong)
-        self.handleAudit()
+        if self.nav.navigateToClassID("MainContent_btnTasks"):
+            time.sleep(self.sleepDurationLong)
+            """
+            MainContent_wizTasks_ctl17_chkPushOrganisationToXml
+            """
+            self.nav.navigateToClassID("MainContent_wizTasks_ctl17_chkPushOrganisationToXml")
+            time.sleep(self.sleepDurationLong)
+            self.nav.navigateToClassID("MainContent_wizTasks_ctl17_btnNextStart")
+            time.sleep(self.sleepDurationLong)
+            # MainContent_wizTasks_ctl22_btnFinishPushOrganisationToXml
+            self.nav.navigateToClassID("MainContent_wizTasks_ctl22_btnFinishPushOrganisationToXml")
+            time.sleep(self.sleepDurationLong)
+            self.handleAudit()
+        else:
+            # assume record not found in this environment
+            msg = "%s not found - skipping processing" % ID
+            self.logFile.write(msg)
 
 
     def navigateToOrg(self, ID):

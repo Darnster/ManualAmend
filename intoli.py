@@ -1,4 +1,5 @@
 from selenium.webdriver.support.ui import WebDriverWait
+import win32com.client
 
 
 def get_clear_browsing_button(driver):
@@ -22,7 +23,7 @@ def clear_cache(driver, timeout=60):
     wait.until_not(get_clear_browsing_button)
 
 if __name__ == "__main__":
-    from selenium import webdriver import Chrome
+    from selenium import webdriver
     driver = webdriver.Chrome()
     #driver = Chrome(executable_path='C:\\selenium\chromedriver73.exe')
 
