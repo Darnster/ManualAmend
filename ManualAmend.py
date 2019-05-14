@@ -11,9 +11,9 @@ Title: OSCAR Manual Amendments Script
 Compatibility: Python 3.6 or later
 Status: Draft
 Author: Danny Ruttle
-Version Date: 2019-04-17
+Version Date: 2019-05-14
 Project: ODS 3rd PArty data Automation
-Internal Ref: v0.7
+Internal Ref: v0.8
 Copyright Health and Social Care Information Centre (c) 2019
 
 Licensed under the Apache License, Version 2.0 (the "License");
@@ -62,14 +62,18 @@ CHANGES:
       so new methods handleDefer and handle Audit added
 0.7 - Added handling to defer re-open requests for manual review.  Refactored Manualamend to run the process with Navigation and 
       ProcessError as separate modules
+      Handles records that display errors (as in the broken record detector)
+      Logging class/method which opens, appends then closes so progress can be monitored
+0.8 - added self.amendCount to logs - this is the loop that keeps a track of the records processed/attempted to process
 
 TO DO:
 
-1. Add logic to prevent infinite call to process() from Webdriver exception - done in v0.6 but not tested
-2. Handle records that display errors (as in the broken record detector) - if required, to be determined by testing
+1. Ensure logging is consistent and relevant - done 0.8, needs testing
+2. Add logic to prevent infinite call to process() from Webdriver exception - done in v0.6 but not tested
 3. Switch to using a config file for running the application
 4. Add a crypto type method for storing domain passwords
-5. add logging class/method which opens, appends then closes so progress can be monitored
+5. Add support for locked records
+6. Move WriteLog into a separate module as it is required by ManualAmend and ProcessError
 
 
 
@@ -87,29 +91,41 @@ class ManAmend:
         :param AuditText: Appropriate message
         :param limit: allows batching of records to be controlled
         """
-        # process args here
+        # process args here ### will be in a config file ###
         self.env = env
         self.user = user
         self.pwd = pwd
         self.amendID = AmendID
         self.auditText = AuditText
         self.processLimit = limit
-        self.fileTime = datetime.datetime.now().strftime("%Y-%m-%dT%H%M%S%Z")  # can't include ":" in filenames
-
+        self.driverPath = 'C:\\selenium\\geckodriver.exe'
         self.binary = FirefoxBinary('C:\\Program Files\\Mozilla Firefox\\firefox.exe')
+
         self.sleepDuration = 1
         self.sleepDurationLong = 2
         self.navigateLimit = 3 #used to set loops when searching for elements/IDs
+
+        #
         self.deferNextRecord = False # used to defer after discovering a ReOpen request
+        self.amendCount = 1
 
         # logging vars
+        self.fileTime = datetime.datetime.now().strftime("%Y-%m-%dT%H%M%S%Z")  # can't include ":" in filenames
         self.logFileName = "ScriptLog_ManualAmends_%s_%s_%s.csv" % (self.env, self.amendID, self.fileTime)
         self.logFile = open(self.logFileName, "w")
 
+        # used to support debugging - so exceptions are reported rather than being handled
+        # by the default behaviour to restart the driver
         self.driverRestart = True
-        #self.logFile.close()
+        self.restartOutputMessage = ""
 
     def WriteLog(self, msg):
+        """
+        Opens up the logfile appends an updated and closes the file
+        This behaviour allows the progress to be reviewed during processing
+        :param msg: string to be written
+        :return: none
+        """
         self.logFile = open(self.logFileName, 'a')
         self.logFile.write(msg)
         self.logFile.close()
@@ -119,7 +135,7 @@ class ManAmend:
         """
         """
 
-        self.driver = Firefox(firefox_binary=self.binary, executable_path='C:\\selenium\geckodriver.exe')
+        self.driver = Firefox(firefox_binary=self.binary, executable_path=self.driverPath)
 
         # create instance of Navigation class here
         self.nav = Navigation(self.driver)
@@ -140,35 +156,36 @@ class ManAmend:
         time.sleep(self.sleepDuration) #allow time to login manually
 
         self.fileWriteTime = datetime.datetime.now().strftime("%Y-%m-%dT%H%M%S%Z")  # can't include ":" in filenames
-        self.WriteLog("processing started: %s\n" % self.fileWriteTime)
+        self.WriteLog('"0","0","processing started/restarted","@ %s"\n' % self.fileWriteTime)
 
         # connect to the environment (not part of the test) to prompt authentication
-        amendCount = 0
+
         self.processState = True
 
         if self.driverRestart: # supports debug
             try:
-                while amendCount < self.processLimit and self.processState == True:
+                while self.amendCount < self.processLimit and self.processState == True:
                     self.processAmendment()
-                    amendCount += 1
+                    self.amendCount += 1
             except WebDriverException:
-                self.restartDriver("WebDriverException in process() > Loop")
+                self.restartOutputMessage = "WebDriverException in process() > Loop"
+                self.restartDriver(self.restartOutputMessage)
         else:
-            while amendCount < self.processLimit and self.processState == True:
+            while self.amendCount < self.processLimit and self.processState == True:
                 self.processAmendment()
-                amendCount += 1
+                self.amendCount += 1
 
         # CLOSE THE SCRIPT LOGFILE:
         self.endFileTime = datetime.datetime.now().strftime("%Y-%m-%dT%H%M%S%Z")  # can't include ":" in filenames
-        self.WriteLog("processing completed: %s\n" % self.endFileTime)
+        self.WriteLog('"%s","0","processing completed","@ %s"\n' % (self.amendCount, self.endFileTime))
         self.driver.quit()
 
     def restartDriver(self, outputMessage):
         print(outputMessage)
         time.sleep(self.sleepDurationLong)
         self.driver.quit()
-        outputMessage = "Quiting driver due to %s" % outputMessage
-        print(outputMessage)
+        self.restartOutputMessage = "Quiting driver due to %s" % outputMessage
+        print(self.restartOutputMessage)
         outputMessage = "Driver disposed now calling process() due to %s" % outputMessage
         print(outputMessage)
         time.sleep(self.sleepDurationLong)
@@ -179,7 +196,6 @@ class ManAmend:
         """
         OrganisationID = 0 # Org being processed - required for audit
         AmendmentsURL = "https://%s/Exchange/ImportGroupManualChanges.aspx?ID=%s" % (self.env, self.amendID)
-        print("Import Group to be processed = %s" % AmendmentsURL)
 
         try:
             self.driver.get(AmendmentsURL)
@@ -187,24 +203,25 @@ class ManAmend:
             self.handleAuth()
             self.driver.get(AmendmentsURL)
         except WebDriverException:
-            outputMessage = "WebDriverException in processAmendment()"
-            self.restartDriver(outputMessage)
+            self.restartOutputMessage = "WebDriverException in processAmendment()"
+            self.restartDriver(self.restartOutputMessage)
 
         time.sleep(self.sleepDurationLong)
 
         try:
             # if we can't get the organisationID then exit
             OrganisationID = self.nav.getOrganisationIDfromProcessLink("MainContent_gvImportGroup_hlProcess_0")
+            print("Now processing %s" % OrganisationID)
         except:
-            msg = '"System Exit!","Unable to retrieve OrganisationID"\n'
+            msg = '"0","0","System Exit!","Unable to retrieve OrganisationID"\n'
             self.WriteLog( msg )
             self.procesState = False
 
         if self.nav.checkNotes("MainContent_gvImportGroup_aNotes_0") or self.deferNextRecord is True:
             # too complex to automate so just defer it
             self.handleDefer( OrganisationID )
-            self.deferNextRecord = False
-            msg = '"%s","Defer","Processing Notes Found\n"' % OrganisationID
+            self.deferNextRecord = False #process for orgs that require reviewing as part of the re-open task
+            msg = '"%s","%s","Defer","Processing Notes Found\n"' % ( self.amendCount, OrganisationID )
             self.WriteLog( msg )
 
         else: #attempt to process
@@ -221,13 +238,14 @@ class ManAmend:
                     """
                     Need to detect if there's an error on the page and by pass for now
                     """
-                    procErr = ProcessingError(OrganisationID, self.driver, self.logFile, self.logFileName)
+                    procErr = ProcessingError(OrganisationID, self.driver, self.logFile, self.logFileName, self.amendCount )
                     if procErr.hasErrors(): # may need to put a conditional here
                         procErr.handleProcessingError()
-                    # Audit panel and buttons have the same ID
+                    else:
+                        self.WriteLog(msg = '"%s","%s","Processed","Routine process completed"\n' % ( self.amendCount, OrganisationID ))
+                    # Audit panel and buttons have the same ID and can appear at this point in the process
                     try:
                         self.handleAudit()
-                        self.WriteLog(msg = '"%s","Processed","Routine process completed"\n' % OrganisationID)
                     except:
                         pass
 
@@ -235,7 +253,7 @@ class ManAmend:
                     # task screen related process
                     try:
                         self.handleClose()
-                        msg = '"%s","ProcessClose","Closure process completed"\n' % OrganisationID
+                        msg = '"%s","%s","ProcessClose","Closure process completed"\n' % ( self.amendCount, OrganisationID )
                         print(msg)
                         self.WriteLog( msg )
                         time.sleep(self.sleepDuration)
@@ -245,7 +263,7 @@ class ManAmend:
 
                     try:
                         self.handleReOpenDefer()
-                        msg = '"%s","ProcessReOpen","ReOpen process flagged to defer"\n' % OrganisationID
+                        msg = '"%s","%s","ProcessReOpen","ReOpen process flagged to defer"\n' % ( self.amendCount, OrganisationID )
                         print(msg)
                         self.WriteLog( msg )
                         time.sleep(self.sleepDuration)

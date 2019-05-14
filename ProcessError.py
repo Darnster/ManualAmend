@@ -1,8 +1,15 @@
 import time
 from Navigation import Navigation
 
+"""
+Changes
+
+amdndCount now included in logs
+
+"""
+
 class ProcessingError:
-    def __init__(self, OrganisationID, driver, logfile, logFileName):
+    def __init__(self, OrganisationID, driver, logfile, logFileName, amendCount):
         self.driver = driver
         self.logFile = logfile
         self.logFileName = logFileName
@@ -10,6 +17,7 @@ class ProcessingError:
         self.errList = []
         self.sleepDuration = 2
         self.nav = Navigation(self.driver)
+        self.amendCount = amendCount
 
     def hasErrors(self):
         """
@@ -36,7 +44,7 @@ class ProcessingError:
             for ul in uls:
                 li = ul.find_elements_by_tag_name("li")
                 for item in li:
-                    outputString = '"%s","%s"\n' % (self.OrganisationID, item.text)
+                    outputString = '"%s","%s","Error to Correct","%s"\n' % ( self.amendCount, self.OrganisationID, item.text)
                     self.errList.append(item.text) # don't require ID for processing
                     self.WriteLog( outputString )
                     # print errors to console
@@ -59,12 +67,12 @@ class ProcessingError:
                 if err == 'Organisation Short Name required when organisation name longer than 40 characters':
                     self.addShortName()
                     self.nav.navigateToClassID("MainContent_btnSave")
-                    msg = '"%s","ProcessErrorFixed","Complex error on Org Maintenance Screen(%s)"\n' % ( self.OrganisationID, err )
+                    msg = '"%s","%s","ProcessErrorFixed","Complex error on Org Maintenance Screen(%s)"\n' % ( self.amendCount, self.OrganisationID, err )
                     self.WriteLog( msg )
                     time.sleep(self.sleepDuration)
             else:
                 if self.nav.navigateToClassID("MainContent_btnDefer"):
-                    msg = '"%s","ProcessErrorDeferred","Complex error on Org Maintenance Screen(%s)"\n' % ( self.OrganisationID, err )
+                    msg = '"%s","%s","ProcessErrorDeferred","Complex error on Org Maintenance Screen(%s)"\n' % ( self.amendCount, self.OrganisationID, err )
                     self.WriteLog( msg )
                     time.sleep( self.sleepDuration )
 
