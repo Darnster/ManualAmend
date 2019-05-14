@@ -164,14 +164,14 @@ class ManAmend:
 
         if self.driverRestart: # supports debug
             try:
-                while self.amendCount < self.processLimit and self.processState == True:
+                while self.amendCount <= self.processLimit and self.processState == True:
                     self.processAmendment()
                     self.amendCount += 1
             except WebDriverException:
                 self.restartOutputMessage = "WebDriverException in process() > Loop"
                 self.restartDriver(self.restartOutputMessage)
         else:
-            while self.amendCount < self.processLimit and self.processState == True:
+            while self.amendCount <= self.processLimit and self.processState == True:
                 self.processAmendment()
                 self.amendCount += 1
 
