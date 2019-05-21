@@ -221,7 +221,7 @@ class ManAmend:
             # too complex to automate so just defer it
             self.handleDefer( OrganisationID )
             self.deferNextRecord = False #process for orgs that require reviewing as part of the re-open task
-            msg = '"%s","%s","Defer","Processing Notes Found\n"' % ( self.amendCount, OrganisationID )
+            msg = '"%s","%s","Defer","Processing Notes Found"\n' % ( self.amendCount, OrganisationID )
             self.WriteLog( msg )
 
         else: #attempt to process
