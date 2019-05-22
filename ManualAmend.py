@@ -236,7 +236,7 @@ class ManAmend:
                 if self.nav.navigateToClassID("MainContent_btnSave"):
                     time.sleep(self.sleepDurationLong)
                     """
-                    Need to detect if there's an error on the page and by pass for now
+                    Need to detect if there's an error on the page and handle or bypass 
                     """
                     procErr = ProcessingError(OrganisationID, self.driver, self.logFile, self.logFileName, self.amendCount )
                     if procErr.hasErrors(): # may need to put a conditional here
@@ -249,28 +249,34 @@ class ManAmend:
                     except:
                         pass
 
+                    # For records that save changes and close tasks
+                    self.handleTasks(OrganisationID)
                 else:
-                    # task screen related process
-                    try:
-                        self.handleClose()
-                        msg = '"%s","%s","ProcessClose","Closure process completed"\n' % ( self.amendCount, OrganisationID )
-                        print(msg)
-                        self.WriteLog( msg )
-                        time.sleep(self.sleepDuration)
-                    except:
-                        # assume nothing to do here
-                        pass
+                    self.handleTasks(OrganisationID)
 
-                    try:
-                        self.handleReOpenDefer()
-                        msg = '"%s","%s","ProcessReOpen","ReOpen process flagged to defer"\n' % ( self.amendCount, OrganisationID )
-                        print(msg)
-                        self.WriteLog( msg )
-                        time.sleep(self.sleepDuration)
-                    except:
-                        # assume nothing to do here
-                        pass
         return self.processState
+
+    def handleTasks(self, OrganisationID):
+        # task screen related process
+        try:
+            self.handleClose()
+            msg = '"%s","%s","ProcessClose","Closure process completed"\n' % (self.amendCount, OrganisationID)
+            print(msg)
+            self.WriteLog(msg)
+            time.sleep(self.sleepDuration)
+        except:
+            # assume nothing to do here
+            pass
+
+        try:
+            self.handleReOpenDefer()
+            msg = '"%s","%s","ProcessReOpen","ReOpen process flagged to defer"\n' % (self.amendCount, OrganisationID)
+            print(msg)
+            self.WriteLog(msg)
+            time.sleep(self.sleepDuration)
+        except:
+            # assume nothing to do here
+            pass
 
     def handleAuth(self):
         """
