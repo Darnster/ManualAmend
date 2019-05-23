@@ -56,7 +56,8 @@ class ProcessingError:
         Provide a list of strings of containing the types of errors that can be fixed by this process
         :return:list
         """
-        return ["Organisation Short Name required when organisation name longer than 40 characters"]
+        return ["Organisation Short Name required when organisation name longer than 40 characters",
+                "Organisation Short Name must be absent unless organisation name longer than 40 characters"]
 
     def handleProcessingError(self):
         '''
@@ -69,6 +70,13 @@ class ProcessingError:
                     self.nav.navigateToClassID("MainContent_btnSave")
                     msg = '"%s","%s","ProcessErrorFixed","Complex error on Org Maintenance Screen(%s)"\n' % ( self.amendCount, self.OrganisationID, err )
                     self.WriteLog( msg )
+                    time.sleep(self.sleepDuration)
+                else:
+                    self.removeShortName()
+                    self.nav.navigateToClassID("MainContent_btnSave")
+                    msg = '"%s","%s","ProcessErrorFixed","Complex error on Org Maintenance Screen(%s)"\n' % (
+                    self.amendCount, self.OrganisationID, err)
+                    self.WriteLog(msg)
                     time.sleep(self.sleepDuration)
             else:
                 if self.nav.navigateToClassID("MainContent_btnDefer"):
@@ -88,6 +96,21 @@ class ProcessingError:
             orgName = nav.getTextbyID(orgNameID)
             time.sleep( self.sleepDuration )
             orgShortName = orgName[0:40]
+            nav.enterTextToClassID(orgShortNameID, orgShortName)
+            return True
+        except:
+            return False
+
+    def removeShortName(self):
+        orgShortNameID = "MainContent_tcDetails_tpOrganisation_ucOrganisation_txtShortName"
+        """
+        get orgName and truncate to 40 chars
+        set orgShortName to shortened value
+        """
+        try:
+            nav = Navigation(self.driver)
+            time.sleep( self.sleepDuration )
+            orgShortName = ""
             nav.enterTextToClassID(orgShortNameID, orgShortName)
             return True
         except:
