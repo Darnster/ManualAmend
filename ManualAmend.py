@@ -5,6 +5,7 @@ from selenium.webdriver.firefox.firefox_binary import FirefoxBinary
 import time, datetime, sys
 from ProcessError import ProcessingError
 from Navigation import Navigation
+from config_parser import cfg_parser
 
 """
 Title: OSCAR Manual Amendments Script
@@ -65,6 +66,7 @@ CHANGES:
       Handles records that display errors (as in the broken record detector)
       Logging class/method which opens, appends then closes so progress can be monitored
 0.8 - added self.amendCount to logs - this is the loop that keeps a track of the records processed/attempted to process
+0.9 - added functionality to read params from a config file
 
 TO DO:
 
@@ -81,25 +83,23 @@ TO DO:
 
 class ManAmend:
 
-    def __init__(self, env, user, pwd, AmendID, AuditText, limit):
+    def __init__(self, configFile):
         """
-
-        :param env: OSCAR environment
-        :param user: user network name (domain not reauired)
-        :param pwd: network password
-        :param AmendID: import group to be processed
-        :param AuditText: Appropriate message
-        :param limit: allows batching of records to be controlled
+        :param configFile: path to text file with config
         """
         # process args here ### will be in a config file ###
-        self.env = env
-        self.user = user
-        self.pwd = pwd
-        self.amendID = AmendID
-        self.auditText = AuditText
-        self.processLimit = limit
-        self.driverPath = 'C:\\selenium\\geckodriver.exe'
-        self.binary = FirefoxBinary('C:\\Program Files\\Mozilla Firefox\\firefox.exe')
+
+        self.config_dict = self.read_config(configFile)
+
+        self.env = self.config_dict.get("env")
+        self.user = self.config_dict.get("user")
+        self.pwd = self.config_dict.get("pwd")
+        self.amendID = self.config_dict.get("AmendID")
+        self.auditText = self.config_dict.get("AuditText")
+        self.processLimit = int(self.config_dict.get("limit"))
+        self.driverPath = self.config_dict.get('driverPath')
+        self.binaryPath = self.config_dict.get('firefoxBinary')
+        self.binary = FirefoxBinary(self.binaryPath)
 
         self.sleepDuration = 1
         self.sleepDurationLong = 2
@@ -130,6 +130,15 @@ class ManAmend:
         self.logFile.write(msg)
         self.logFile.close()
 
+
+    def read_config(self, config):
+        """
+        Read from config file into a dictionary
+        :param config: text file with
+        :return: dictionary containing config properties
+        """
+        cp = cfg_parser.config_parser()
+        return cp.read(config)
 
     def process(self):
         """
@@ -330,22 +339,12 @@ class ManAmend:
 
 if __name__ == "__main__":
     args = sys.argv
-    if len(args) == 7:
-        env = sys.argv[1]
-        user = sys.argv[2]
-        pwd = sys.argv[3]
-        amendID = sys.argv[4]
-        auditText = sys.argv[5] # "CQC ALIGNMENT - SELENIUM AUTOMATED ACCEPTANCE"
-        recordsToProces = sys.argv[6]
-        MA = ManAmend(env, user, pwd, amendID, auditText, int(recordsToProces))
+    if len(args) == 2:
+        configFile = sys.argv[1]
+        MA = ManAmend(configFile)
         MA.process()
     else:
         msg = "Please provide the following arguments:\n"
-        msg+= "1. environment, e.g. OSCAR-TESTSP\n"
-        msg+= "2. user (shortcode only, Domain not required)\n"
-        msg+= "3. password\n"
-        msg+= "4. amendID (The Import to be procesed - e.g. 627)\n"
-        msg+= "5. auditText - e.g.CQC ALIGNMENT - SELENIUM AUTOMATED ACCEPTANCE\n"
-        msg+= "6. Number of recordsToProces - e.g. 5\n\n"
+        msg+= "config file name\n\n"
         print( msg )
 
