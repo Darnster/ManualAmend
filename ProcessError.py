@@ -20,6 +20,9 @@ class ProcessingError:
         self.nav = Navigation(self.driver)
         self.amendCount = amendCount
 
+        self.wl = WriteLog
+        self.wl = WriteLog.WL()
+
     def hasErrors(self):
         """
         Confirms whether the error panel is present
@@ -124,6 +127,4 @@ class ProcessingError:
         :param msg: string to be written
         :return: none
         """
-        wl = WriteLog
-        wl = WriteLog.WL()
-        wl.WriteLog(self.logFileName, msg)
+        self.wl.WriteLog(self.logFileName, msg)

@@ -73,18 +73,15 @@ CHANGES:
 
 TO DO:
 
-1. Ensure logging is consistent and relevant - done 0.8, needs testing
-2. Add logic to prevent infinite call to process() from Webdriver exception - done in v0.6 but not tested
-3. Switch to using a config file for running the application
-4. Add a crypto type method for storing domain passwords
-5. Add support for locked records
+1. Add a crypto type method for storing domain passwords
+2. Add support for locked records
 
 
 *** major issue with this.tabModal is null error 24/5/19 ***
 Steps to resolve:
 1. Increase debug level to identify where the issue manifests itself - Done
 2. Change handleAuth to alert.accept() rather than sendkeys ENTER - Done and solved the issue
-3. Revert to basic auth via URL
+3. Revert to basic auth via URL - Firefox thows up many dialogs - so not an option.
 4. Research switch to main window - not required
 
 """
@@ -122,6 +119,8 @@ class ManAmend:
         self.fileTime = datetime.datetime.now().strftime("%Y-%m-%dT%H%M%S%Z")  # can't include ":" in filenames
         self.logFileName = "ScriptLog_ManualAmends_%s_%s_%s.csv" % (self.env, self.amendID, self.fileTime)
         self.logFile = open(self.logFileName, "w")
+        self.wl = WriteLog
+        self.wl = WriteLog.WL()
 
         # used to support debugging - so exceptions are reported rather than being handled
         # by the default behaviour to restart the driver
@@ -135,9 +134,7 @@ class ManAmend:
         :param msg: string to be written
         :return: none
         """
-        wl = WriteLog
-        wl = WriteLog.WL()
-        wl.WriteLog(self.logFileName, msg)
+        self.wl.WriteLog(self.logFileName, msg)
 
 
     def read_config(self, config):
