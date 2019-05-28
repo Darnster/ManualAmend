@@ -1,5 +1,5 @@
 """
-Module to encrypt/decrypt passwords to store in
+Module to encrypt/decrypt passwords to store in the config file
 """
 
 from cryptography.fernet import Fernet
