@@ -74,8 +74,7 @@ CHANGES:
 
 TO DO:
 
-1. Add a crypto type method for storing domain passwords
-2. Add support for locked records
+1. Add support for locked records
 
 
 *** major issue with this.tabModal is null error 24/5/19 ***
