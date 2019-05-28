@@ -1,5 +1,6 @@
 import time
 from Navigation import Navigation
+import WriteLog
 
 """
 Changes
@@ -117,6 +118,12 @@ class ProcessingError:
             return False
 
     def WriteLog(self, msg):
-        self.logFile = open(self.logFileName, 'a')
-        self.logFile.write(msg)
-        self.logFile.close()
+        """
+        Opens up the logfile appends an updated and closes the file
+        This behaviour allows the progress to be reviewed during processing
+        :param msg: string to be written
+        :return: none
+        """
+        wl = WriteLog
+        wl = WriteLog.WL()
+        wl.WriteLog(self.logFileName, msg)
