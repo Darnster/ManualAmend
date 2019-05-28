@@ -6,7 +6,7 @@ import time, datetime, sys
 from ProcessError import ProcessingError
 from Navigation import Navigation
 from config_parser import cfg_parser
-import WriteLog
+import WriteLog, CryptProcess
 """
 Title: OSCAR Manual Amendments Script
 Compatibility: Python 3.6 or later
@@ -70,6 +70,7 @@ CHANGES:
 0.9.1 - Changed handleAuth() to use alert.accept() rather than sendkeys ENTER
 0.9.2 - closeOnly flag added to the config file to prevent handleTasks() being called for routine updates
         Moved WriteLog into a separate module as it is required by ManualAmend and ProcessError
+0.9.3 - added support for password encryption
 
 TO DO:
 
@@ -88,7 +89,7 @@ Steps to resolve:
 
 class ManAmend:
 
-    def __init__(self, configFile):
+    def __init__(self, configFile, key):
         """
         :param configFile: path to text file with config
         """
@@ -98,7 +99,8 @@ class ManAmend:
 
         self.env = self.config_dict.get("env")
         self.user = self.config_dict.get("user")
-        self.pwd = self.config_dict.get("pwd")
+        self.pwd = self.config_dict.get("pwd") #this is the encrypted password
+        self.pwd = self.deCryptPwd()
         self.amendID = self.config_dict.get("AmendID")
         self.auditText = self.config_dict.get("AuditText")
         self.processLimit = int(self.config_dict.get("limit"))
@@ -145,6 +147,10 @@ class ManAmend:
         """
         cp = cfg_parser.config_parser()
         return cp.read(config)
+
+    def deCryptPwd(self):
+        plain = CryptProcess.decrypt(bytes(self.pwd, 'utf-8'), key).decode()
+        return plain
 
     def process(self):
         """
@@ -350,12 +356,14 @@ class ManAmend:
 
 if __name__ == "__main__":
     args = sys.argv
-    if len(args) == 2:
-        configFile = sys.argv[1]
-        MA = ManAmend(configFile)
+    if len(args) == 3:
+        configFile = args[1]
+        key = args[2]
+        MA = ManAmend(configFile, key)
         MA.process()
     else:
         msg = "Please provide the following arguments:\n"
-        msg+= "config file name\n\n"
+        msg+= "config file name\n"
+        msg += "encryption key (fromCryptProcess)\n\n"
         print( msg )
 
