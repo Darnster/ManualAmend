@@ -14,7 +14,7 @@ Status: Draft
 Author: Danny Ruttle
 Version Date: 2019-05-14
 Project: ODS 3rd PArty data Automation
-Internal Ref: v0.8
+Internal Ref: v0.9.1
 Copyright Health and Social Care Information Centre (c) 2019
 
 Licensed under the Apache License, Version 2.0 (the "License");
@@ -67,6 +67,7 @@ CHANGES:
       Logging class/method which opens, appends then closes so progress can be monitored
 0.8 - added self.amendCount to logs - this is the loop that keeps a track of the records processed/attempted to process
 0.9 - added functionality to read params from a config file
+0.9.1 - Changed handleAuth() to use alert.accept() rather than sendkeys ENTER
 
 TO DO:
 
@@ -77,7 +78,12 @@ TO DO:
 5. Add support for locked records
 6. Move WriteLog into a separate module as it is required by ManualAmend and ProcessError
 
-
+*** major issue with this.tabModal is null error 24/5/19 ***
+Steps yo resolve:
+1. Increase debug level to identify where the issue manifests itself - Done
+2. Change handleAuth to alert.accept() rather than sendkeys ENTER - Done and solved the issue
+3. Revert to basic auth via URL
+4. Research switch to main window - not required
 
 """
 
@@ -151,23 +157,28 @@ class ManAmend:
 
         #test connect:
         connectURL = "https://%s" % ( self.env )
+        #connectURL = "https://www.google.co.uk"
         print("Connecting to %s......" % connectURL)
         try:
             self.driver.get(connectURL)
             self.handleAuth()
-            self.driver.get(connectURL)
+            time.sleep(self.sleepDurationLong)
+            print("debug: control back with process() after handleAuth")
+            print("debug: call to navigate to connectURL removed")
+            #self.driver.get(connectURL)
             print("Successfully connected to %s......" % connectURL)
         except UnexpectedAlertPresentException:
             print("need to authenticate when accessing home")
             self.handleAuth()
             self.driver.get(connectURL)
+        except WebDriverException as w:
+            print(w.msg)
+            self.restartDriver(w.msg)
 
         time.sleep(self.sleepDuration) #allow time to login manually
 
         self.fileWriteTime = datetime.datetime.now().strftime("%Y-%m-%dT%H%M%S%Z")  # can't include ":" in filenames
         self.WriteLog('"0","0","processing started/restarted","@ %s"\n' % self.fileWriteTime)
-
-        # connect to the environment (not part of the test) to prompt authentication
 
         self.processState = True
 
@@ -302,7 +313,9 @@ class ManAmend:
         time.sleep(self.sleepDurationLong)
         shell.Sendkeys(self.pwd)
         time.sleep(self.sleepDurationLong)
-        shell.Sendkeys("{ENTER}")
+        #shell.Sendkeys("{ENTER}")
+        #accept() alert replaced sendkeys within win32com.client
+        self.driver.switch_to.alert.accept()
         time.sleep(self.sleepDurationLong)
 
     def handleClose(self):
