@@ -6,15 +6,15 @@ import time, datetime, sys
 from ProcessError import ProcessingError
 from Navigation import Navigation
 from config_parser import cfg_parser
-
+import WriteLog
 """
 Title: OSCAR Manual Amendments Script
 Compatibility: Python 3.6 or later
 Status: Draft
 Author: Danny Ruttle
-Version Date: 2019-05-14
-Project: ODS 3rd PArty data Automation
-Internal Ref: v0.9.1
+Version Date: 2019-05-28
+Project: ODS 3rd Party data Automation
+Internal Ref: v0.9.2
 Copyright Health and Social Care Information Centre (c) 2019
 
 Licensed under the Apache License, Version 2.0 (the "License");
@@ -68,6 +68,8 @@ CHANGES:
 0.8 - added self.amendCount to logs - this is the loop that keeps a track of the records processed/attempted to process
 0.9 - added functionality to read params from a config file
 0.9.1 - Changed handleAuth() to use alert.accept() rather than sendkeys ENTER
+0.9.2 - closeOnly flag added to the config file to prevent handleTasks() being called for routine updates
+        Moved WriteLog into a separate module as it is required by ManualAmend and ProcessError
 
 TO DO:
 
@@ -76,10 +78,10 @@ TO DO:
 3. Switch to using a config file for running the application
 4. Add a crypto type method for storing domain passwords
 5. Add support for locked records
-6. Move WriteLog into a separate module as it is required by ManualAmend and ProcessError
+
 
 *** major issue with this.tabModal is null error 24/5/19 ***
-Steps yo resolve:
+Steps to resolve:
 1. Increase debug level to identify where the issue manifests itself - Done
 2. Change handleAuth to alert.accept() rather than sendkeys ENTER - Done and solved the issue
 3. Revert to basic auth via URL
@@ -106,6 +108,7 @@ class ManAmend:
         self.driverPath = self.config_dict.get('driverPath')
         self.binaryPath = self.config_dict.get('firefoxBinary')
         self.binary = FirefoxBinary(self.binaryPath)
+        self.closeOnly = self.config_dict.get('closeOnly', 0) # default to zero if not present
 
         self.sleepDuration = 1
         self.sleepDurationLong = 2
@@ -132,9 +135,9 @@ class ManAmend:
         :param msg: string to be written
         :return: none
         """
-        self.logFile = open(self.logFileName, 'a')
-        self.logFile.write(msg)
-        self.logFile.close()
+        wl = WriteLog
+        wl = WriteLog.WL()
+        wl.WriteLog(self.logFileName, msg)
 
 
     def read_config(self, config):
@@ -163,9 +166,7 @@ class ManAmend:
             self.driver.get(connectURL)
             self.handleAuth()
             time.sleep(self.sleepDurationLong)
-            print("debug: control back with process() after handleAuth")
-            print("debug: call to navigate to connectURL removed")
-            #self.driver.get(connectURL)
+            self.driver.get(connectURL)
             print("Successfully connected to %s......" % connectURL)
         except UnexpectedAlertPresentException:
             print("need to authenticate when accessing home")
@@ -180,24 +181,23 @@ class ManAmend:
         self.fileWriteTime = datetime.datetime.now().strftime("%Y-%m-%dT%H%M%S%Z")  # can't include ":" in filenames
         self.WriteLog('"0","0","processing started/restarted","@ %s"\n' % self.fileWriteTime)
 
-        self.processState = True
-
         if self.driverRestart: # supports debug
             try:
-                while self.amendCount <= self.processLimit and self.processState == True:
+                while self.amendCount <= self.processLimit:
                     self.processAmendment()
                     self.amendCount += 1
             except WebDriverException:
                 self.restartOutputMessage = "WebDriverException in process() > Loop"
                 self.restartDriver(self.restartOutputMessage)
         else:
-            while self.amendCount <= self.processLimit and self.processState == True:
+            while self.amendCount <= self.processLimit:
                 self.processAmendment()
                 self.amendCount += 1
 
         # CLOSE THE SCRIPT LOGFILE:
         self.endFileTime = datetime.datetime.now().strftime("%Y-%m-%dT%H%M%S%Z")  # can't include ":" in filenames
         self.WriteLog('"%s","0","processing completed","@ %s"\n' % (self.amendCount, self.endFileTime))
+        self.logFile.close()
         self.driver.quit()
 
     def restartDriver(self, outputMessage):
@@ -226,7 +226,7 @@ class ManAmend:
             self.restartOutputMessage = "WebDriverException in processAmendment()"
             self.restartDriver(self.restartOutputMessage)
 
-        time.sleep(self.sleepDurationLong)
+        time.sleep(self.sleepDuration)
 
         try:
             # if we can't get the organisationID then exit
@@ -270,11 +270,12 @@ class ManAmend:
                         pass
 
                     # For records that save changes and close tasks
-                    self.handleTasks(OrganisationID)
+                    if self.closeOnly == 1:
+                        self.handleTasks(OrganisationID)
                 else:
                     self.handleTasks(OrganisationID)
 
-        return self.processState
+        #return self.processState
 
     def handleTasks(self, OrganisationID):
         # task screen related process
@@ -320,11 +321,11 @@ class ManAmend:
 
     def handleClose(self):
         self.nav.navigateToClassID("MainContent_wizTasks_ctl17_chkCloseOperationally")
-        time.sleep(self.sleepDurationLong)
+        time.sleep(self.sleepDuration)
         self.nav.navigateToClassID("MainContent_wizTasks_ctl17_btnNextStart")
-        time.sleep(self.sleepDurationLong)
+        time.sleep(self.sleepDuration)
         self.nav.navigateToClassID("MainContent_wizTasks_ctl18_btnFinishClose")
-        time.sleep(self.sleepDurationLong)
+        time.sleep(self.sleepDuration)
         self.handleAudit()
 
     def handleReOpenDefer(self):
