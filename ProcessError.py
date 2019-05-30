@@ -108,17 +108,17 @@ class ProcessingError:
     def removeShortName(self):
         orgShortNameID = "MainContent_tcDetails_tpOrganisation_ucOrganisation_txtShortName"
         """
-        get orgName and truncate to 40 chars
-        set orgShortName to shortened value
+        clear orgShortName
         """
+
         try:
             nav = Navigation(self.driver)
             time.sleep( self.sleepDuration )
-            orgShortName = ""
-            nav.enterTextToClassID(orgShortNameID, orgShortName)
+            nav.clearTextFromClassID(orgShortNameID)
             return True
         except:
             return False
+
 
     def WriteLog(self, msg):
         """

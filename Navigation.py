@@ -75,7 +75,7 @@ class Navigation:
 
     def enterTextToClassID(self, ID, text):
         """
-        :param ID: String = ID of widget to be clicked
+        :param ID: String = ID of widget to be updated
         :return: Boolean
         """
         result = False
@@ -96,6 +96,33 @@ class Navigation:
                 attempts += 1
                 time.sleep(self.sleepDurationLong )
         return result
+
+
+    def clearTextFromClassID(self, ID):
+        """
+        :param ID: String = ID of widget to be cleared
+        :return: Boolean
+        """
+
+        result = False
+        attempts = 0
+        while attempts < self.navigateLimit:
+            try:
+                self.target = self.driver.find_element_by_id( ID )
+                self.target.clear()
+                result = True
+                break
+            except StaleElementReferenceException:
+                attempts += 1
+                time.sleep( self.sleepDurationLong )
+            except ElementNotVisibleException:
+                attempts += 1
+                time.sleep( self.sleepDurationLong )
+            except WebDriverException:
+                attempts += 1
+                time.sleep(self.sleepDurationLong )
+        return result
+
 
     def checkNotes(self, ID):   # ID = MainContent_gvImportGroup_aNotes_0
         """
