@@ -5,7 +5,7 @@ import WriteLog
 """
 Changes
 
-amdndCount now included in logs
+amdendCount now included in logs
 
 """
 
@@ -23,13 +23,13 @@ class ProcessingError:
         self.wl = WriteLog
         self.wl = WriteLog.WL()
 
-    def hasErrors(self):
+    def hasErrors(self, ID):
         """
         Confirms whether the error panel is present
         :return: boolean
         """
         try:
-            self.errors = self.driver.find_element_by_id("MainContent_CustomValidationSummary1")
+            self.errors = self.driver.find_element_by_id( ID )
             if len(self.getErrors()) > 0:
                 return True
             else:

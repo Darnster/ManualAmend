@@ -12,9 +12,9 @@ Title: OSCAR Manual Amendments Script
 Compatibility: Python 3.6 or later
 Status: Draft
 Author: Danny Ruttle
-Version Date: 2019-05-28
+Version Date: 2019-05-31
 Project: ODS 3rd Party data Automation
-Internal Ref: v0.9.2
+Internal Ref: v0.9.4
 Copyright Health and Social Care Information Centre (c) 2019
 
 Licensed under the Apache License, Version 2.0 (the "License");
@@ -71,10 +71,13 @@ CHANGES:
 0.9.2 - closeOnly flag added to the config file to prevent handleTasks() being called for routine updates
         Moved WriteLog into a separate module as it is required by ManualAmend and ProcessError
 0.9.3 - added support for password encryption
+0.9.4 - Removed support for closeOnly as we need to deal with mised files which include closures
+        Added support for complex errors on the final Tasks screen (deferred for Organisation Closure)
+        Updated ProcessError.hasErrors() to include the Class ID for the Errors Panel
 
 TO DO:
 
-1. Add support for locked records
+1. Review AmendCount and repeated attempts to process a record (31/5/19) DR + AL
 
 
 *** major issue with this.tabModal is null error 24/5/19 ***
@@ -239,16 +242,25 @@ class ManAmend:
             self.WriteLog( msg )
             self.procesState = False
 
-        if self.nav.checkNotes("MainContent_gvImportGroup_aNotes_0") or self.deferNextRecord is True:
+        if self.nav.checkNotes("MainContent_gvImportGroup_aNotes_0"):
             # too complex to automate so just defer it
             self.handleDefer( OrganisationID )
-            self.deferNextRecord = False #process for orgs that require reviewing as part of the re-open task
             msg = '"%s","%s","Defer","Processing Notes Found"\n' % ( self.amendCount, OrganisationID )
             self.WriteLog( msg )
 
+        elif self.deferNextRecord is True:
+            self.handleDefer(OrganisationID)
+            self.deferNextRecord = False  # process for orgs that require reviewing as part of the re-open task
+            msg = '"%s","%s","Defer","Un-processible state reached so deferred"\n' % (self.amendCount, OrganisationID)
+            self.WriteLog(msg)
+
         else: #attempt to process
+
             if self.nav.navigateToClassID("MainContent_gvImportGroup_hlProcess_0"):
                 time.sleep( self.sleepDuration )
+
+                # add logic to handle locked record here:
+
                 try:
                     # handle save alert ### need to see more examples of these so scenarios can be tested ###
                     self.driver.switch_to.alert.dismiss()
@@ -261,7 +273,7 @@ class ManAmend:
                     Need to detect if there's an error on the page and handle or bypass 
                     """
                     procErr = ProcessingError(OrganisationID, self.driver, self.logFile, self.logFileName, self.amendCount )
-                    if procErr.hasErrors(): # may need to put a conditional here
+                    if procErr.hasErrors("MainContent_CustomValidationSummary1"): # may need to put a conditional here
                         procErr.handleProcessingError()
                     else:
                         self.WriteLog(msg = '"%s","%s","Processed","Routine process completed"\n' % ( self.amendCount, OrganisationID ))
@@ -272,17 +284,50 @@ class ManAmend:
                         pass
 
                     # For records that save changes and close tasks
-                    if self.closeOnly == 1:
+                    # this next few lines detect whether we are on the tasks page after regular processing
+                    try:
+                        self.nav.searchforClassID("MainContent_wizTasks_ctl17_btnNextStart")
                         self.handleTasks(OrganisationID)
+                    except:
+                        pass
                 else:
                     self.handleTasks(OrganisationID)
 
-        #return self.processState
+            """
+                Locked Records support, but the handle save alert code above already does this, so commented out
+                try: # if the record is locked it will be handled by the Except block below. 
+                        except UnexpectedAlertPresentException as e:
+                time.sleep(self.sleepDuration)
+                messageText = e.msg
+                if messageText != "":
+                    if messageText.find("This record is currently locked"):
+                        self.deferLockedRecord(OrganisationID, e)
+                else:
+                    # may need to set the next record to defer and redirect to the amends list...
+                    pass
+            """
+
+
+
+    def deferLockedRecord(self, OrganisationID, e):
+        """
+        :param OrganisationID: import ID for Org
+        :param e: exception object
+        :return:
+        """
+        # handle locked record
+        self.driver.switch_to.alert.dismiss()  # need to test this yet (accept | dismiss)
+        # Press the Defer button
+        self.nav.navigateToClassID("MainContent_btnDefer")
+        # OSCAR redirects to the manual amends list
+        msg = '"%s","%s","Defer","%s"\n' % (self.amendCount, OrganisationID, e.msg)
+        self.WriteLog(msg)
+
 
     def handleTasks(self, OrganisationID):
         # task screen related process
         try:
-            self.handleClose()
+            self.handleClose( OrganisationID )
             msg = '"%s","%s","ProcessClose","Closure process completed"\n' % (self.amendCount, OrganisationID)
             print(msg)
             self.WriteLog(msg)
@@ -321,13 +366,18 @@ class ManAmend:
         self.driver.switch_to.alert.accept()
         time.sleep(self.sleepDurationLong)
 
-    def handleClose(self):
+    def handleClose(self, OrganisationID):
         self.nav.navigateToClassID("MainContent_wizTasks_ctl17_chkCloseOperationally")
         time.sleep(self.sleepDuration)
         self.nav.navigateToClassID("MainContent_wizTasks_ctl17_btnNextStart")
         time.sleep(self.sleepDuration)
         self.nav.navigateToClassID("MainContent_wizTasks_ctl18_btnFinishClose")
         time.sleep(self.sleepDuration)
+        procErr = ProcessingError(OrganisationID, self.driver, self.logFile, self.logFileName, self.amendCount)
+        if procErr.hasErrors("MainContent_cvsTasks"):
+            self.deferNextRecord = True
+            self.nav.navigateToClassID("MainContent_wizTasks_ctl18_btnCancelClose")
+
         self.handleAudit()
 
     def handleReOpenDefer(self):
@@ -335,7 +385,8 @@ class ManAmend:
         if self.nav.searchforClassID("MainContent_wizTasks_ctl17_chkReOpenLegally"):
             self.deferNextRecord = True
             time.sleep(self.sleepDurationLong)
-            self.nav.navigateToClassID("MainContent_wizTasks_ctl17_btnCancelStart")
+
+
 
     def handleDefer(self, OrganisationID):
         self.nav.navigateToClassID("MainContent_gvImportGroup_chkDefer_0")
