@@ -12,9 +12,9 @@ Title: OSCAR Manual Amendments Script
 Compatibility: Python 3.6 or later
 Status: Draft
 Author: Danny Ruttle
-Version Date: 2019-05-31
+Version Date: 2019-09-20
 Project: ODS 3rd Party data Automation
-Internal Ref: v0.9.4
+Internal Ref: v0.9.5
 Copyright Health and Social Care Information Centre (c) 2019
 
 Licensed under the Apache License, Version 2.0 (the "License");
@@ -74,10 +74,12 @@ CHANGES:
 0.9.4 - Removed support for closeOnly as we need to deal with mised files which include closures
         Added support for complex errors on the final Tasks screen (deferred for Organisation Closure)
         Updated ProcessError.hasErrors() to include the Class ID for the Errors Panel
+0.9.5   Add actionProcess() method.  Temporarily updated call to nav.checkNotes() to call actionProcess()
 
 TO DO:
 
 1. Review AmendCount and repeated attempts to process a record (31/5/19) DR + AL
+2. Determine whether bypassing nav.checkNotes() is safe to do for all imports.
 
 
 *** major issue with this.tabModal is null error 24/5/19 ***
@@ -244,9 +246,14 @@ class ManAmend:
 
         if self.nav.checkNotes("MainContent_gvImportGroup_aNotes_0"):
             # too complex to automate so just defer it
-            self.handleDefer( OrganisationID )
-            msg = '"%s","%s","Defer","Processing Notes Found"\n' % ( self.amendCount, OrganisationID )
-            self.WriteLog( msg )
+            # determine if this is just a closure and if so call
+            """
+            **** need to comment the line below out and uncomment the three that follow ****
+            """
+            self.actionProcess(OrganisationID)
+            #self.handleDefer( OrganisationID )
+            #msg = '"%s","%s","Defer","Processing Notes Found"\n' % ( self.amendCount, OrganisationID )
+            #self.WriteLog( msg )
 
         elif self.deferNextRecord is True:
             self.handleDefer(OrganisationID)
@@ -255,6 +262,9 @@ class ManAmend:
             self.WriteLog(msg)
 
         else: #attempt to process
+            self.actionProcess()
+
+    def actionProcess(self, OrganisationID):
 
             if self.nav.navigateToClassID("MainContent_gvImportGroup_hlProcess_0"):
                 time.sleep( self.sleepDuration )
