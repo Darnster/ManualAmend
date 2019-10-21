@@ -248,7 +248,7 @@ class ManAmend:
             # too complex to automate so just defer it
             # determine if this is just a closure and if so call
             """
-            **** need to comment the line below out and uncomment the three that follow ****
+            **** need to comment the line below out and uncomment the three that follow to ****
             """
             self.actionProcess(OrganisationID)
             #self.handleDefer( OrganisationID )
