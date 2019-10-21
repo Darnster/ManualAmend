@@ -262,7 +262,7 @@ class ManAmend:
             self.WriteLog(msg)
 
         else: #attempt to process
-            self.actionProcess()
+            self.actionProcess( OrganisationID )
 
     def actionProcess(self, OrganisationID):
 
