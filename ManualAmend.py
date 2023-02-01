@@ -5,7 +5,7 @@ from selenium.webdriver.firefox.firefox_binary import FirefoxBinary
 import time, datetime, sys
 from ProcessError import ProcessingError
 from Navigation import Navigation
-from config_parser import cfg_parser
+import cfg_parser
 import WriteLog, CryptProcess
 """
 Title: OSCAR Manual Amendments Script
